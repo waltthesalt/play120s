@@ -1,0 +1,28 @@
+{
+  "name": "play120s",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "start": "nodemon server.js"
+  },
+  "engines": {
+    "node": "12.16.1"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "express": "^4.17.2",
+    "nodemon": "^2.0.3",
+    "socket.io": "^2.4.1"
+  },
+  "description": "",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/120s/Play120s.git"
+  },
+  "bugs": {
+    "url": "https://github.com/120s/Play120s/issues"
+  },
+  "homepage": "https://github.com/120s/Play120s#readme",
+  "keywords": []
+}
