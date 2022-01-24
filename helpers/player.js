@@ -83,7 +83,7 @@ export default class Player {
         }
         var trumpsTicker = 0;
         var renegableTicker = 0;
-        console.log('opening up play buttons (index:' + this.index + ') and trump is '+tSuit);
+        console.log('opening up ' + game.players[game.mySeat].playerCards.length + ' playable cards (index:' + this.index + ') and trump is '+tSuit);
         for (var i = 0; i < game.players[game.mySeat].playerCards.length; i++) {
             if ((!game.players[game.mySeat].playerCards[i].isPlayed()) && ((game.players[game.mySeat].playerCards[i].suit == tSuit) || ((game.players[game.mySeat].playerCards[i].rank == 'Ace') && (game.players[game.mySeat].playerCards[i].suit == 1)))) {
                 trumpsTicker++;
@@ -98,15 +98,18 @@ export default class Player {
         this.playerCards.forEach(function(item, index) {
             item.pic.setInteractive();
             item.pic.off('pointerup');
+            //console.log('Removing stale listener from ' + index);
             
             if (item.isTrump(tSuit) || (((!trumped) || (trumpsTicker == 0) || (renegableTicker == trumpsTicker)))) {
                 item.pic.on('pointerover', function() {
                     this.setTint(0x88ff88); // This card in is an option so shade it green
+                    //console.log('Allowing card '+index);
                 });  
             } else {
                 // board is trumped and you have non-renegable trumps
                 item.pic.on('pointerover', function() {
                     this.setTint(0xff8888); // This card is not an option so shade it red
+                    //console.log('Disallowing card '+index);
                 });
             }
             
@@ -115,10 +118,11 @@ export default class Player {
                 this.clearTint();
             });
             if (item.isTrump(tSuit) || (((!trumped) || (trumpsTicker == 0) || (renegableTicker == trumpsTicker)))) {    // only set the listener for legal plays
-                //console.log('activating a card ' + index);
+                console.log('activating card ' + index);
                 item.pic.on('pointerup', function() {   
                     self.makeUnplayable(game);
-                    game.socket.emit("cardPlayed", game.mySeat, index);
+                    game.socket.emit("cardPlayed", game.mySeat, index); // Telling the server
+                    game.showReceivedPlay(game.mySeat, index);          // Show it on my screen right away to avoid server lag
                 });
             }    
         });
@@ -154,7 +158,6 @@ export default class Player {
     }
     
     makeUnplayable(game) {
-        console.log('function makeunplayable');
         this.playerCards.forEach(function(item) {
             item.pic.off('pointerover');
             item.pic.off('pointerout');            

@@ -81,8 +81,9 @@ export default class Game extends Phaser.Scene {
                     game.character[seat].setVisible(false);    
                 }
             });
-            this.socket.on('dealCards', function (seat, rank, suit, value, location = -1) {
+            this.socket.on('dealCards', function (seat, rank, suit, value, showOnScreen, location = -1) {
                 //console.log('received ' + rank + ' of ' + suit); 
+                /*
                 if ((!game.bidding) && (!cleaned)) {
                     //console.log('cleaning up cards');
                     //bBar.hideDealButton();
@@ -91,8 +92,8 @@ export default class Game extends Phaser.Scene {
                     avatar[2].setAlpha(0.75);
                     avatar[3].setAlpha(0.75);
                     cleaned = true;
-                }
-                game.receiveCard(seat, rank, suit, value, location);
+                }*/
+                game.receiveCard(seat, rank, suit, value, showOnScreen, location);
             });
             this.socket.on('receivedBidfromServer', function (seat, bid) {
                 console.log('The server told me seat ' + seat + ' bid ' + bid);
@@ -100,12 +101,18 @@ export default class Game extends Phaser.Scene {
             });    
             this.socket.on('requestBid', function (seat, highBid, dealer) {
                 timeBar[seat].setFillStyle(0x00FF00);
+                game.trickTally[0].setText('');   // Good time to clear the trick counter
+                game.trickTally[1].setText('');
                 if ((game.mySeat == seat)) {     // is it me you are looking for?   
                     console.log('received a request to bid'); 
                     game.receiveBidPrompt(highBid, dealer);
                 }
             });
             this.socket.on('requestSuit', function (seat, highBid, dealer) {
+                timeBar[seat].setFillStyle(0x00FF00);
+                timeBar[(seat + 1) % 4].setFillStyle(0xdddddd);
+                timeBar[(seat + 2) % 4].setFillStyle(0xdddddd);
+                timeBar[(seat + 3) % 4].setFillStyle(0xdddddd);                
                 if (game.mySeat == seat) {     // is it me you are looking for?
                     console.log('received a request to choose suit'); 
                     highBidder = game.mySeat;
@@ -122,6 +129,17 @@ export default class Game extends Phaser.Scene {
                     game.showReceivedDiscards(seat, discards);
                 }
             });
+            this.socket.on('replaceCard', function (seat, location, rank, suit, value) {
+                if (game.mySeat != seat) {     
+                    console.log('running the new replaceCard function');
+                    var x = game.players[seat].playerCards[location].pic.x;
+                    var y = game.players[seat].playerCards[location].pic.y;
+                    game.players[seat].playerCards[location].pic.setVisible(false);
+                    game.players[seat].playerCards[location] = new Card(suit, rank, value);
+                    let suitnames = ['clubs', 'hearts', 'spades', 'diamonds'];
+                    game.players[seat].playerCards[location].render(x, y, 'cards', 'back', game);
+                }
+            });
             this.socket.on('yourPlay', function (seat, trump, trumped, leadpoints) {
                 // Light up the current player's time bar
                 timeBar[seat].setFillStyle(0x00FF00);
@@ -134,8 +152,9 @@ export default class Game extends Phaser.Scene {
                 }
             });            
             this.socket.on('cardPlayed', function (seat, cardIndex) {
-                //console.log('received a request to show a played card'); 
-                game.showReceivedPlay(seat, cardIndex);
+                if (game.mySeat != seat) {  // I already showed my own move
+                    game.showReceivedPlay(seat, cardIndex);
+                }
             });
         
             this.socket.on('trickOver', function (winner) {
@@ -143,18 +162,18 @@ export default class Game extends Phaser.Scene {
                 game.sweepTrick(winner);
             });         
         
-            this.socket.on('updateScore', function (bidderScore, nonBidderScore) {    
-                game.scoreDisplay[(highBidder + game.mySeat) % 2].setText(bidderScore);
-                game.scoreDisplay[(highBidder + game.mySeat + 1) % 2].setText(nonBidderScore); 
+            this.socket.on('updateScore', function (weScore, theyScore) {    
+                game.scoreDisplay[game.mySeat % 2].setText(weScore);    // Orient the scores so everyone sees their own score as We
+                game.scoreDisplay[(game.mySeat + 1) % 2].setText(theyScore); 
                 game.receivedHandOver();
             });    
         
             this.socket.on('misdeal', function () {
-               game.receivedHandOver();
+                game.receivedHandOver();
             });            
         };
 
-        this.receiveCard = (seat, rank, suit, value, location = -1) => {
+        this.receiveCard = (seat, rank, suit, value, showOnScreen, location = -1) => {
             if (seat == 4) {    
                 var localSeat = 4;  // leave the kit where it is
             } else {
@@ -165,7 +184,7 @@ export default class Game extends Phaser.Scene {
                 game.players[localSeat].playerCards.push(new Card(suit, rank, value));
                 var i = game.players[localSeat].playerCards.length - 1;
             } else {
-                //console.log('received ' + rank + ' of ' + suit + ' for ' + seat);
+                console.log('received ' + rank + ' of ' + suit + ' (seat ' + seat+ ' position '+location);
                 game.players[localSeat].playerCards[location] = new Card(suit, rank, value);
                 var i = location;
             }            
@@ -182,13 +201,15 @@ export default class Game extends Phaser.Scene {
             } else {
                 var dealerx = 1350;
                 var dealery = game.players[game.dealer].y;                    
-            }            
+            }          
+        
             if (seat == game.mySeat) { // Should we show the card face up?
+                if (location != -1) { console.log('Rendered a replaced card at location '+location); }
                 this.players[localSeat].playerCards[i].render(dealerx, dealery, 'cards', suitnames[game.players[localSeat].playerCards[i].suit]+''+game.players[localSeat].playerCards[i].rank, game);  // render the card below the screen and slide in                
             } else {
                 this.players[localSeat].playerCards[i].render(dealerx, dealery, 'cards', 'back', game);
             }
-
+            
             var targetX = game.players[localSeat].x + (i * 36);
             
             this.players[localSeat].playerCards[i].pic.clearTint().setVisible(true).setDepth(targetX);
@@ -201,6 +222,7 @@ export default class Game extends Phaser.Scene {
                 duration: 300,
                 delay: i * 50
             });
+            
         }
         
         this.displayBid = (player, thisBid) => {
@@ -226,7 +248,9 @@ export default class Game extends Phaser.Scene {
                     }, callbackScope: this
                 });                 
             }
-
+            game.text3.setVisible(false);
+            element.setVisible(false);
+            instructions_panel.setVisible(false);   // Time to phase out the instruction panel
         }
         
         this.nextBid = () => { 
@@ -321,14 +345,14 @@ export default class Game extends Phaser.Scene {
         var tricksWon = [0, 0];
         this.scoreDisplay = [];
 
-        this.scoreDisplay.push(this.add.bitmapText(scoresheet.x - 45, scoresheet.y - 10, 'desyrel', score[0], 24).setTint(0x000f55));
-        this.scoreDisplay.push(this.add.bitmapText(scoresheet.x + 30, scoresheet.y - 10, 'desyrel', score[1], 24).setTint(0x000f55));
-        this.scoreDisplay.push(this.add.bitmapText(scoresheet.x - 50, scoresheet.y - 35, 'desyrel', 'We', 20).setTint(0x000f55));
-        this.scoreDisplay.push(this.add.bitmapText(scoresheet.x + 20, scoresheet.y - 35, 'desyrel', 'They', 20).setTint(0x000f55));
+        this.scoreDisplay.push(this.add.bitmapText(scoresheet.x - 50, scoresheet.y - 10, 'gothic2', '', 24).setTint(0x000f55));
+        this.scoreDisplay.push(this.add.bitmapText(scoresheet.x + 26, scoresheet.y - 10, 'gothic2', '', 24).setTint(0x000f55));
+        this.scoreDisplay.push(this.add.bitmapText(scoresheet.x - 50, scoresheet.y - 35, 'gothic2', 'We', 20).setTint(0x000f55));
+        this.scoreDisplay.push(this.add.bitmapText(scoresheet.x + 20, scoresheet.y - 35, 'gothic2', 'They', 20).setTint(0x000f55));
         
         this.trickTally = [];
         this.trickTally.push(this.add.text(scoresheet.x - 45, scoresheet.y + 20, '', { fontSize: 16 }).setTint(0x88aaff));
-        this.trickTally.push(this.add.text(scoresheet.x + 45, scoresheet.y + 20, '', { fontSize: 16 }).setTint(0x88aaff));
+        this.trickTally.push(this.add.text(scoresheet.x + 25, scoresheet.y + 20, '', { fontSize: 16 }).setTint(0x88aaff));
         
         this.players.push(new Player(0, false, 570, 680));
         this.players.push(new Player(1, false, 125, 410));
@@ -390,7 +414,7 @@ export default class Game extends Phaser.Scene {
                             instructions_panel.setY(365).setSize(400,210);
                     },
                     onComplete: function () {
-                            var element = self.add.dom(avatar[0].x, avatar[1].y+40).createFromCache('nameform');
+                            element = self.add.dom(avatar[0].x, avatar[1].y+40).createFromCache('nameform');
                             var el = document.createElement('select');
                             element.setPerspective(800);
                             element.addListener('click');
@@ -529,6 +553,7 @@ export default class Game extends Phaser.Scene {
                         discards.push(c); 
                         game.players[game.mySeat].playerCards[c].pic.setVisible(false);
                         while ((k < 3) && (game.players[4].playerCards[k].isScrapped())) {
+                            game.players[4].playerCards[k].pic.setVisible(false);   // hide the kit cards that were left behind
                             k++;
                         }
                         if (k < 3) {
@@ -536,17 +561,19 @@ export default class Game extends Phaser.Scene {
                             var newX = game.players[game.mySeat].playerCards[c].pic.x;
                             var newY = game.players[game.mySeat].playerCards[c].pic.y;
                             
-                            game.players[game.mySeat].playerCards[c] = game.players[4].playerCards[k];              // copy the kit card into the local copy of the hand
+                            //game.players[game.mySeat].playerCards[c] = new Card(game.players[4].playerCards[k].suit, game.players[4].playerCards[k].rank, game.players[4].playerCards[k].value);              // copy the kit card into the local copy of the hand
+                            //game.players[game.mySeat].playerCards[c].render(game.players[4].playerCards[k].x, game.players[4].playerCards[k].y,);
                             cardsToPickUp.push(k);                                                                  // and now tell the server you have it   
-                            game.players[game.mySeat].playerCards[c].pic.setVisible(true);       
+                            //game.players[game.mySeat].playerCards[c].pic.setVisible(true);       
                             game.tweens.add({   // slide it over to the empty space in the highBidder hand
-                                targets: game.players[game.mySeat].playerCards[c].pic,
+                                targets: game.players[4].playerCards[k].pic,
                                 x: newX,
                                 y: newY,
                                 depth: newX,
                                 ease: 'Power1',
                                 duration: 300
-                            });                        
+                            });
+                            game.players[game.mySeat].playerCards[c] = game.players[4].playerCards[k];  // Copy it into the local copy of the hand
                             k++;
                         }
                     }
@@ -564,18 +591,6 @@ export default class Game extends Phaser.Scene {
                 game.socket.emit("announceDiscards", game.mySeat, discards); 
             }
 
-    
-            /*if (game.mySeat == highBidder) {    // Let's see what we discarded from the kit as well
-                for (var c = 0; c < 3; c++) {
-                    if (game.players[4].playerCards[c].isScrapped()) {
-                        game.players[4].playerCards[c].pic.setVisible(false);
-                        discards.push(c);
-                    }
-                }
-                // now tell the server which kit cards to subtract
-                game.socket.emit("announceDiscards", 4, discards); 
-            }*/
-  
         }
         
         this.showReceivedDiscards = (seat, discards) => {
@@ -608,9 +623,13 @@ export default class Game extends Phaser.Scene {
             for (let i = 0; ((i < game.playedCards.length) && (i < 4)); i++) {
                 myTargets.push(game.playedCards[i].pic);
             }
-            console.log('sweeping targets (' + myTargets.length + '): ' + game.cardArrayPrint(game.playedCards));
+            //console.log('sweeping targets (' + myTargets.length + '): ' + game.cardArrayPrint(game.playedCards));
             //console.log(game.cardArrayPrint(game.players[0].playerCards) + '  ' + game.cardArrayPrint(game.players[1].playerCards) + '  ' + game.cardArrayPrint(game.players[2].playerCards) + '  ' + game.cardArrayPrint(game.players[3].playerCards));
-            
+            for (let i = 0; i < 4; i++) {
+                if (i == game.mySeat) {
+                    game.socket.emit('boardClear', game.mySeat);        
+                }
+            }
             game.tweens.add({
                 targets: myTargets,
                 x: game.bubbleText[winner].x,
@@ -619,11 +638,11 @@ export default class Game extends Phaser.Scene {
                 duration: 300,  // how fast they sweep away
                 delay: 700, // how long to wait in the middle
                 onStart: function () {              // notify the server that the board is clear and then add sparkles
-                    for (let i = 0; i < 4; i++) {
+                    /*for (let i = 0; i < 4; i++) {
                         if (i == game.mySeat) {
                             game.socket.emit('boardClear', game.mySeat);        
                         }
-                    }
+                    }*/
                     game.players[winner].lightUp(this, myTargets, winner, game);
                 },
                 onComplete: function () {
@@ -634,72 +653,47 @@ export default class Game extends Phaser.Scene {
             }); 
         }            
 
- /*       this.handOver = () => {
-            console.log('hand over');
-            p.shufflePack();
-            game.bestTrumpValue = 0;
-
-            this.players[0].playerCards = p.cards.slice(0, 5);  // replace with an addCards() method?
-            this.players[1].playerCards = p.cards.slice(5, 10);
-            this.players[2].playerCards = p.cards.slice(10, 15);
-            this.players[3].playerCards = p.cards.slice(15, 20);
-            this.players[4].playerCards = p.cards.slice(20, 23); // kitty
-            this.dealer = (this.dealer + 1) % 4;  // move the dealer along
-            currentPlayer = (game.dealer + 1) % 4;            
-            this.players[0].generate(570, 680, this);
-            this.players[1].generate(125, 410, this);
-            this.players[2].generate(570, 150, this);
-            this.players[3].generate(1000, 410, this);
-            this.players[4].generate(1072, 765, this);
-            for (let i = 0; i < 4; i++) {
-                game.bubbleText[i].setText('');    
-                avatar[i].setAlpha(0.75);
-            }
-
-
-            this.trickTally[0].setText();
-            this.trickTally[1].setText();
-            this.playedCards = [];
-            tricksWon = [0, 0];
-            game.playsIn = 0;
-            highBid = 0;
-            dCount = 0;
-            
-            bidsIn = 0;
-            bBar.activateDealButton(null, [bBar.buttons[0], bBar.buttons[1], bBar.buttons[2], bBar.buttons[3]], game, bBar.r, false);    
-            this.trickNum = 1;  
-            if (game.multiplayer) {
-                game.socket.emit("updateScore", score[highBidder % 2], score[(highBidder + 1) % 2]);    
-            }
-            
-        }
-   */     
         this.receivedHandOver = () => {
-            this.trickTally[0].setText();
-            this.trickTally[1].setText();
             this.playedCards = [];
 
             game.playsIn = 0;
             game.bidding = true;
             cleaned = false;
-
+            let suitnames = ['clubs', 'hearts', 'spades', 'diamonds'];
+            if (game.dealer == 0) {
+                var dealerx = game.players[game.dealer].x;
+                var dealery = 1050;
+            } else if (game.dealer == 1) {
+                var dealerx = -100;
+                var dealery = game.players[game.dealer].y;
+            } else if (game.dealer == 2) {
+                var dealerx = game.players[game.dealer].x;
+                var dealery = -125;
+            } else {
+                var dealerx = 1400;
+                var dealery = game.players[game.dealer].y;                    
+            }  
             for (let a = 0; a < 5; a++) {
                 for (let b = 0; b < game.players[a].playerCards.length; b++) {
                     game.tweens.add({
                         targets: [game.players[a].playerCards[b].pic],
-                        x: 1,
-                        y: 1000,
+                        x: dealerx,
+                        y: dealery,
                         ease: 'Power1',
-                        delay: 500,
-                        duration: 750
+                        delay: 2000,
+                        duration: 100 * (a+b)
                     });
                 }
-                game.players[a].playerCards = [];
+                game.players[a].playerCards = [];   // Delete the locally stored players
             }
-            game.bubbleText[0].setText('');
+            game.bubbleText[0].setText('');     // Erase previous bids
             game.bubbleText[1].setText('');
             game.bubbleText[2].setText('');
             game.bubbleText[3].setText(''); 
+            avatar[0].setAlpha(1);  // Restore the avatars
+            avatar[1].setAlpha(1);
+            avatar[2].setAlpha(1);
+            avatar[3].setAlpha(1);            
         }
     }
     

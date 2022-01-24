@@ -34,7 +34,8 @@ var dealer = -1;
 var currentPlayer = -1;
 var playerToBeat = -1;
 var pointsToBeat = 0;
-var bestTrumpValue = 0;
+var bestTrumpValue = 0; // Keep track of the highest trump for that extra 5 points
+var bestTrumpPlayer = -1;
 app.get('/*', (req, res, next) => {
   res.sendFile('/home/ec2-user/environment' + req.url);
 });
@@ -151,6 +152,7 @@ io.on('connection', function (socket) {
             bidding = false;
             misdeal = true;
             io.sockets.in("room-"+roomno).emit('misdeal'); 
+            tallyUpHand();   // same as when hand concludes the normal way
             return;
         } else if ((seat == highBidder) && (bid == 0)) {
             // highbidder backed down, we are done;
@@ -192,6 +194,7 @@ io.on('connection', function (socket) {
         for (let c = 0; c < 5; c++) {
             if ((players[highBidder].playerCards[c].isScrapped()) && (kitCards.length > 0)) {
                 players[highBidder].playerCards[c] = players[4].playerCards[kitCards.shift()];   // Copy in the kit card
+                io.sockets.in("room-"+roomno).emit('replaceCard', highBidder, c, players[highBidder].playerCards[c].rank, players[highBidder].playerCards[c].suit, players[highBidder].playerCards[c].value); // Tell the others about the kit card coming in
             } else if ((players[highBidder].playerCards[c].isScrapped()) && (kitCards.length == 0)) {
                 discards.push(c);
             }
@@ -223,7 +226,7 @@ io.on('connection', function (socket) {
     });   
     
     socket.on('cardPlayed', function (seat, cardIndex) {
-        io.sockets.in("room-"+roomno).emit('cardPlayed', seat, cardIndex);
+        io.sockets.in("room-"+roomno).emit('cardPlayed', seat, cardIndex);  // Tell it to all the players
         console.log('received the '+players[seat].playerCards[cardIndex].rank + ' of ' + players[seat].playerCards[cardIndex].suit + ' from server (trumps is '+trumpSuit+ ').');
         players[seat].playerCards[cardIndex].setPlayed();     // Use this method to tell if already played.
         var playValue = players[seat].playerCards[cardIndex].getPointsValue(trumpSuit);
@@ -267,7 +270,7 @@ io.on('connection', function (socket) {
             trickNum++;
             if (pointsToBeat > bestTrumpValue) {
                 bestTrumpValue = pointsToBeat; 
-                var bestTrumpPlayer = playerToBeat;
+                bestTrumpPlayer = playerToBeat;
             } 
             tricksWon[playerToBeat % 2]++; // tally the trick
             currentPlayer = playerToBeat;  // lead with winner
@@ -278,8 +281,7 @@ io.on('connection', function (socket) {
                 //nextPlay();   The next play will start when all clients have cleared their board
             } else {
                 console.log('Hand is over!');
-                trickNum = 0;
-                bestTrumpValue = 0;
+
                 tricksWon[bestTrumpPlayer % 2]++; // score an extra for best card
                 if ((tricksWon[highBidder % 2] * 5) >= highBid) {
                     // bidder made the contract
@@ -308,25 +310,10 @@ io.on('connection', function (socket) {
                 }
                 // update the scoreboard with the new scores
                 handOver = true;
-                
-                dealer = (dealer + 1) % 4;
-                currentPlayer = (dealer + 1) % 4;
-                console.log('dealer:'+dealer+'  currentPlayer:'+currentPlayer);
-                playedCards = [];
-                bubbles = [];
-                highBid = 0;
-                highBidder = -1;
-                bidsIn = 0;
-                playsIn = 0;
-                dCount = 0;
-                whist = false;
-                shuffleAndDeal();
             }
             io.sockets.in("room-"+roomno).emit('trickOver', playerToBeat);  // Tell the clients to end the trick
             if (handOver) {
-                console.log('updating scores ' + score[0] + ' vs '+ score[1]);
-                io.sockets.in("room-"+roomno).emit('updateScore', score[0], score[1]);    // Tell the clients to end the hand
-                shuffleAndDeal();
+                tallyUpHand();
             }
             var h = '';
             for (var x=0; x<4; x++) {
@@ -350,11 +337,9 @@ io.on('connection', function (socket) {
     socket.on('boardClear', function (seat) {
         boardCount[roomno]++;
         //console.log(boardCount[roomno] + ' players cleared the trick.');
-        if (boardCount[roomno] == 4) {
+        if ((boardCount[roomno] == 4) && !((playsIn == 0) && (trickNum == 0))) {    // When we have heard from all players but the hand is not yet over
             console.log('all tricks cleared - move to next trick with currentPlayer=' + currentPlayer);
             boardCount[roomno] = 0;
-            playerToBeat = -1;
-            pointsToBeat = 0;
             nextPlay();
         }
     
@@ -387,13 +372,14 @@ var shuffleAndDeal = () => {
         for (var pl = 0; pl < 5; pl++) {
             if (((dealer + 1 + pl) % 5 < 4) || (cd < 3)) { // don't put too many in kit
                 // send the card to the others
-                io.sockets.in("room-"+roomno).emit("dealCards", (dealer + 1 + pl) % 5, players[(dealer + 1 + pl) % 5].playerCards[cd].rank, players[(dealer + 1 + pl) % 5].playerCards[cd].suit, players[(dealer + 1 + pl) % 5].playerCards[cd].value);
+                io.sockets.in("room-"+roomno).emit("dealCards", (dealer + 1 + pl) % 5, players[(dealer + 1 + pl) % 5].playerCards[cd].rank, players[(dealer + 1 + pl) % 5].playerCards[cd].suit, players[(dealer + 1 + pl) % 5].playerCards[cd].value, true);
             }
         }
     }
     bidding = true;
     nextBid();    
-    //io.sockets.in("room-"+roomno).emit('receivedSuitfromServer', highBidder, highBid, players[0].bestSuit);
+    //io.sockets.in("room-"+roomno).emit('updateScore', 20, 10);    // Tell the clients to end the hand                   TEST
+    //setTimeout(function() { shuffleAndDeal(); }, 5050); // Give the clients a chance to clean up before going to next hand          TEST
 }
 
 var nextBid = () => { 
@@ -412,7 +398,7 @@ var fillHands = () => {
                 if (pl==highBidder) {console.log('replacing card ' + c); }
                 players[pl].playerCards[c] = p.cards[topPack]; // replace
                 // send the card to the server to tell the others
-                io.sockets.in("room-"+roomno).emit("dealCards", pl, players[pl].playerCards[c].rank, players[pl].playerCards[c].suit, players[pl].playerCards[c].value, c);    // this will trigger showReceivedCards
+                io.sockets.in("room-"+roomno).emit("dealCards", pl, players[pl].playerCards[c].rank, players[pl].playerCards[c].suit, players[pl].playerCards[c].value, true, c);    // this will trigger showReceivedCards
                 took[pl]++; // Teach the AI what each player took from the pack
                 topPack++;
             }
@@ -439,3 +425,24 @@ var nextPlay = (startingPointsToBeat = 0, startingPlayerToBeat = 0, whistToBoard
     // Tell the current player to play a card
     io.sockets.in("room-"+roomno).emit("yourPlay", currentPlayer, trumpSuit, whistToBoard, startingPointsToBeat);
 };
+
+var tallyUpHand = () => {
+    misdeal = false;
+    dealer = (dealer + 1) % 4;  // Advance the dealer, even after misdeal
+    currentPlayer = (dealer + 1) % 4;
+    console.log('dealer:'+dealer+'  currentPlayer:'+currentPlayer);
+    playedCards = [];
+    bubbles = [];
+    highBid = 0;
+    highBidder = -1;
+    bidsIn = 0;
+    playsIn = 0;
+    dCount = 0;
+    whist = false;  
+    trickNum = 0;
+    bestTrumpValue = 0;    
+    bestTrumpPlayer = -1
+    console.log('updating scores ' + score[0] + ' vs '+ score[1]);
+    io.sockets.in("room-"+roomno).emit('updateScore', score[0], score[1]);    // Tell the clients to end the hand
+    setTimeout(function() { shuffleAndDeal(); }, 2000); // Give the clients a chance to clean up before going to next hand
+}
