@@ -98,7 +98,7 @@ io.on('connection', function (socket) {
         }
     }
 
-    playerSockets.push(socket);
+    playerSockets.push(socket.id);
   
     socket.on('takeSeat', function(seat) {
         console.log(socket.id + ' reserved seat ' + seat); 
@@ -203,7 +203,7 @@ io.on('connection', function (socket) {
         console.log('highBidder has ' + discards.length + ' discards after picking up kit');
         io.sockets.in("room-"+roomno).emit('announceDiscards', highBidder, discards);
         dCount++;   // need all four players to finish
-        console.log(dCount + ' players are ready to move on');
+        //console.log(dCount + ' players are ready to move on');
         if (dCount == 5) {  // received discards from all players, so time to move ahead in the game.
             fillHands(); 
         }
@@ -227,7 +227,7 @@ io.on('connection', function (socket) {
     
     socket.on('cardPlayed', function (seat, cardIndex) {
         io.sockets.in("room-"+roomno).emit('cardPlayed', seat, cardIndex);  // Tell it to all the players
-        console.log('received the '+players[seat].playerCards[cardIndex].rank + ' of ' + players[seat].playerCards[cardIndex].suit + ' from server (trumps is '+trumpSuit+ ').');
+        //console.log('received the '+players[seat].playerCards[cardIndex].rank + ' of ' + players[seat].playerCards[cardIndex].suit + ' from server (trumps is '+trumpSuit+ ').');
         players[seat].playerCards[cardIndex].setPlayed();     // Use this method to tell if already played.
         var playValue = players[seat].playerCards[cardIndex].getPointsValue(trumpSuit);
         
@@ -248,7 +248,7 @@ io.on('connection', function (socket) {
             playerToBeat = currentPlayer;  // first card, so it must be best
             pointsToBeat = playValue;
         } else {
-            if (players[seat].playerCards[cardIndex].suit == leadSuit) {
+            if ((players[seat].playerCards[cardIndex].suit == leadSuit) && (leadSuit != trumpSuit)) {
                 playValue += 50;
             }
             if (playValue > pointsToBeat) {
@@ -312,20 +312,22 @@ io.on('connection', function (socket) {
                 handOver = true;
             }
             io.sockets.in("room-"+roomno).emit('trickOver', playerToBeat);  // Tell the clients to end the trick
-            if (handOver) {
+            if (handOver) {     // Hand is over
                 tallyUpHand();
-            }
-            var h = '';
-            for (var x=0; x<4; x++) {
-                for (var y=0; y<5; y++) {
-                    if (players[x].playerCards[y].isPlayed()) {
-                        h = h + '-,';
-                    } else {
-                        h = h + players[x].playerCards[y].rank + ',';
+            } else {            // Trick is over but hand is not
+                var h = '';
+                for (var x=0; x<4; x++) {
+                    for (var y=0; y<5; y++) {
+                        if (players[x].playerCards[y].isPlayed()) {
+                            h = h + '-,';
+                        } else {
+                            h = h + players[x].playerCards[y].rank + ',';
+                        }
                     }
+                    h = h + ',,,';
                 }
-                h = h + ',,,';
             }
+            setTimeout(function() { nextPlay(); }, 500); // Give the clients a chance to clean up before going to next trick
             console.log('complete hands:'+h);            
         } else {
             currentPlayer = (currentPlayer + 1) % 4;    // Advance the player around the table
@@ -335,23 +337,28 @@ io.on('connection', function (socket) {
     });
     
     socket.on('boardClear', function (seat) {
-        boardCount[roomno]++;
-        //console.log(boardCount[roomno] + ' players cleared the trick.');
-        if ((boardCount[roomno] == 4) && !((playsIn == 0) && (trickNum == 0))) {    // When we have heard from all players but the hand is not yet over
+        boardCount[roomno]++;   // Do we need this function, which waits on all the clients before proceeding??
+        console.log(boardCount[roomno] + ' players cleared the trick.');
+        if ((boardCount[roomno] == 4) ) {    // When we have heard from all players but the hand is not yet over
             console.log('all tricks cleared - move to next trick with currentPlayer=' + currentPlayer);
             boardCount[roomno] = 0;
-            nextPlay();
+            /*if ((playsIn == 0) && (trickNum == 0))
+            nextPlay();*/
         }
     
     });    
     
     socket.on('disconnect', function () {
         var whoLeft = playerSockets.findIndex(player => player == socket.id);
-        playerSockets.splice(whoLeft);
-        playerSeats.splice(whoLeft);
+        var seatWhoLeft = playerSeats[whoLeft];
+        console.log('playerSockets contains '+playerSockets.length+ ' entries.');
+        playerSockets.splice(whoLeft, 1);
+        console.log('playerSockets contains '+playerSockets.length+ ' entries.');
+        playerSeats.splice(whoLeft, 1);
         highBid = 0;
         highBidder = -1;
-        console.log('A user disconnected: ' + socket.id + ' leaving ' + playerSockets.length + ' connections.');
+        console.log('A user disconnected: ' + socket.id + ' from seat ' + seatWhoLeft + ' leaving ' + playerSockets.length + ' connections.');
+        io.sockets.in("room-"+roomno).emit('playerLeftTable', seatWhoLeft);
 
     });
 });
@@ -371,6 +378,7 @@ var shuffleAndDeal = () => {
     for (var cd = 0; cd < 5; cd++) {
         for (var pl = 0; pl < 5; pl++) {
             if (((dealer + 1 + pl) % 5 < 4) || (cd < 3)) { // don't put too many in kit
+                players[(dealer + 1 + pl) % 5].playerCards[cd].played = false;  // reset this card as unplayed
                 // send the card to the others
                 io.sockets.in("room-"+roomno).emit("dealCards", (dealer + 1 + pl) % 5, players[(dealer + 1 + pl) % 5].playerCards[cd].rank, players[(dealer + 1 + pl) % 5].playerCards[cd].suit, players[(dealer + 1 + pl) % 5].playerCards[cd].value, true);
             }
@@ -395,8 +403,9 @@ var fillHands = () => {
         var pl = (dealer + 1 + i) % 4;
         for (var c = 0; c < 5; c++) {
             if (players[pl].playerCards[c].isScrapped()) {
-                if (pl==highBidder) {console.log('replacing card ' + c); }
+                //if (pl==highBidder) {console.log('replacing card ' + c); }
                 players[pl].playerCards[c] = p.cards[topPack]; // replace
+                players[pl].playerCards[c].played = false;
                 // send the card to the server to tell the others
                 io.sockets.in("room-"+roomno).emit("dealCards", pl, players[pl].playerCards[c].rank, players[pl].playerCards[c].suit, players[pl].playerCards[c].value, true, c);    // this will trigger showReceivedCards
                 took[pl]++; // Teach the AI what each player took from the pack
@@ -430,9 +439,10 @@ var tallyUpHand = () => {
     misdeal = false;
     dealer = (dealer + 1) % 4;  // Advance the dealer, even after misdeal
     currentPlayer = (dealer + 1) % 4;
-    console.log('dealer:'+dealer+'  currentPlayer:'+currentPlayer);
+    console.log('tallyUpHand() dealer:'+dealer+'  currentPlayer:'+currentPlayer);
     playedCards = [];
     bubbles = [];
+    boardCount[roomno] = 0;
     highBid = 0;
     highBidder = -1;
     bidsIn = 0;
@@ -441,7 +451,9 @@ var tallyUpHand = () => {
     whist = false;  
     trickNum = 0;
     bestTrumpValue = 0;    
-    bestTrumpPlayer = -1
+    bestTrumpPlayer = -1;
+    tricksWon[0] = 0;
+    tricksWon[1] = 0;
     console.log('updating scores ' + score[0] + ' vs '+ score[1]);
     io.sockets.in("room-"+roomno).emit('updateScore', score[0], score[1]);    // Tell the clients to end the hand
     setTimeout(function() { shuffleAndDeal(); }, 2000); // Give the clients a chance to clean up before going to next hand

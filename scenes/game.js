@@ -68,12 +68,17 @@ export default class Game extends Phaser.Scene {
                 //console.log('room connected: '+ datas);
             });
             this.socket.on('reservedSeat', function(seat) {
-               console.log('Just learned that seat ' + seat + ' is taken.');
-               if (seat != game.mySeat) {
+                console.log('Just learned that seat ' + seat + ' is taken.');
+                avatar[seat].setInteractive(false);               
+                if (seat != game.mySeat) {
                    avatar[seat].setFillStyle(0x770000); 
-                   avatar[seat].setInteractive(false);
-               }
+                }
             });
+            this.socket.on('playerLeftTable', function(seat) {
+                console.log('Just learned that player in seat ' + seat + ' has left.');
+                avatar[seat].setInteractive(true);               
+                avatar[seat].setFillStyle(0x222222); 
+            });            
             this.socket.on('setName', function (seat, name) {
                 console.log('received ' + name + ' from seat ' + seat);
                 if (seat != game.mySeat) {
@@ -83,16 +88,6 @@ export default class Game extends Phaser.Scene {
             });
             this.socket.on('dealCards', function (seat, rank, suit, value, showOnScreen, location = -1) {
                 //console.log('received ' + rank + ' of ' + suit); 
-                /*
-                if ((!game.bidding) && (!cleaned)) {
-                    //console.log('cleaning up cards');
-                    //bBar.hideDealButton();
-                    avatar[0].setAlpha(0.75);
-                    avatar[1].setAlpha(0.75);
-                    avatar[2].setAlpha(0.75);
-                    avatar[3].setAlpha(0.75);
-                    cleaned = true;
-                }*/
                 game.receiveCard(seat, rank, suit, value, showOnScreen, location);
             });
             this.socket.on('receivedBidfromServer', function (seat, bid) {
@@ -213,16 +208,21 @@ export default class Game extends Phaser.Scene {
             var targetX = game.players[localSeat].x + (i * 36);
             
             this.players[localSeat].playerCards[i].pic.clearTint().setVisible(true).setDepth(targetX);
-
-            this.tweens.add({   
-                targets: game.players[localSeat].playerCards[i].pic,
-                x: targetX,
-                y: game.players[localSeat].y,
-                ease: 'Power1',
-                duration: 300,
-                delay: i * 50
-            });
-            
+                
+                this.tweens.add({   
+                    targets: game.players[localSeat].playerCards[i].pic,
+                    x: targetX,
+                    y: game.players[localSeat].y,
+                    ease: 'Power1',
+                    duration: 300,
+                    delay: i * 50,
+                    onComplete: () => {
+                            if (game.players[localSeat].playerCards[i].isPlayed()) {    // If the cards arrive after the play message, then pull out the card at the end.
+                                game.players[localSeat].slideItIn(game, i);
+                            }
+                    }, callbackScope: this
+                });
+                            
         }
         
         this.displayBid = (player, thisBid) => {
