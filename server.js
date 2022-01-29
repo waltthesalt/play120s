@@ -43,7 +43,7 @@ var pointsToBeat = 0;
 var bestTrumpValue = 0; // Keep track of the highest trump for that extra 5 points
 var bestTrumpPlayer = -1;
 app.get('/*', (req, res, next) => {
-  res.sendFile('/home/ec2-user/play120s' + req.url);
+  res.sendFile('/home/ec2-user/environment' + req.url);
 });
 
 // Initialize global variables
@@ -93,7 +93,7 @@ io.on('connection', function (socket) {
         //console.log('Telling everyone whats after happening.');
         // Tell this player what is already in place
         for (var i=0; i<playerSockets.length; i++) {
-            //console.log('Found the player ' + playerSockets[i] + ' to send out.');
+            console.log('Found the player ' + playerSeats[i] + ' to send out.');
             io.sockets.in("room-"+roomno).emit('reservedSeat', playerSeats[i]);
         }     
         for (i=0; i<4; i++) {
@@ -115,6 +115,7 @@ io.on('connection', function (socket) {
             playedCards = [];
             playerSeats = [];
             bubbles = [];
+            clearInterval(gameInterval);
         }
         
         playerSeats.push(seat);
@@ -147,7 +148,7 @@ io.on('connection', function (socket) {
         gameClock = 100;    // Reset the clock
         io.sockets.in("room-"+roomno).emit('receivedSuitfromServer', highBidder, highBid, trumpSuit);   // Start the discarding
         console.log('starting timer on suits');
-        gameInterval = setInterval(pitterPatter, 1500);
+        gameInterval = setInterval(pitterPatter, 2000);
     });
     
     socket.on('tookCardsFromKit', function (kitCards) {
@@ -506,7 +507,7 @@ var pitterPatter = () => {
             console.log('Go to AI');
         }
     }
-    console.log('lets get at er '+gameClock+'. gameState is '+gameState);
+    //console.log('lets get at er '+gameClock+'. gameState is '+gameState);
 }
 
 var tallyUpHand = () => {
@@ -531,5 +532,5 @@ var tallyUpHand = () => {
     
     console.log('updating scores ' + score[0] + ' vs '+ score[1]);
     io.sockets.in("room-"+roomno).emit('updateScore', score[0], score[1], dealer);    // Tell the clients to end the hand
-    setTimeout(function() { shuffleAndDeal(); }, 3500); // Give the clients a chance to clean up before going to next hand
+    setTimeout(function() { shuffleAndDeal(); }, 4000); // Give the clients a chance to clean up before going to next hand
 }

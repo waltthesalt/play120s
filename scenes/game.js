@@ -5,6 +5,7 @@ import Pack from '../helpers/dealer.js';
 import InfoBar from '../helpers/infobar.js';
 import ButtonBar from '../helpers/buttonbar.js';
 import HealthBar from '../helpers/healthbar.js';
+import PlayerDisplay from '../helpers/playerdisplay.js';
 const DEALING = 0;
 const BIDDING = 1;
 const SELECTING = 2;
@@ -56,13 +57,11 @@ export default class Game extends Phaser.Scene {
         p.createPack();       // calling our function to fill our array
         p.shufflePack();
         this.bubbleText = []; 
-        var timerTween;
+        //var timerTween;
         let game = this;
         //this.[player] = this.add.bitmapText(this.players[player].x + 107, y, 'gothic2', bidText, 32).setAlpha(0).setDepth(2001);
         // multiplayer server
         this.hostGame = () => {
-            this.multiplayer = true;
-            //console.log(socket1);
             var socket = io();
             this.socket = socket;
     
@@ -74,23 +73,16 @@ export default class Game extends Phaser.Scene {
             });
             this.socket.on('reservedSeat', function(seat, dealer) {
                 console.log('Just learned that seat ' + seat + ' is taken.');
-                avatar[seat].setInteractive(false);             
-                if (seat != game.mySeat) {
-                   avatar[seat].setFillStyle(0x770000); 
-                }
+                avatars.seatTaken(seat);
                 game.dealer = dealer;               // Tell the client who the dealer is, i.e. where the cards come from
             });
             this.socket.on('playerLeftTable', function(seat) {
                 console.log('Just learned that player in seat ' + seat + ' has left.');
-                avatar[seat].setInteractive(true);               
-                avatar[seat].setFillStyle(0x222222); 
+                avatars.playerLeft(seat);
             });            
             this.socket.on('setName', function (seat, name) {
                 console.log('received ' + name + ' from seat ' + seat);
-                if (seat != game.mySeat) {
-                    game.nameText[seat].setText(name);
-                    game.character[seat].setVisible(false);    
-                }
+                avatars.setName(seat, name);
             });
             this.socket.on('dealCards', function (seat, rank, suit, value, showOnScreen, location = -1) {
                 //console.log('received ' + rank + ' of ' + suit); 
@@ -101,7 +93,7 @@ export default class Game extends Phaser.Scene {
                 game.displayBid(seat, bid);
             });    
             this.socket.on('requestBid', function (seat, highBid, dealer) {
-                timeBar[seat].setFillStyle(0x00FF00);
+                avatars.activate(seat);
                 game.trickTally[0].setText('');   // Good time to clear the trick counter
                 game.trickTally[1].setText('');
                 if ((game.mySeat == seat)) {     // is it me you are looking for?   
@@ -110,10 +102,7 @@ export default class Game extends Phaser.Scene {
                 }
             });
             this.socket.on('requestSuit', function (seat, highBid, dealer) {
-                timeBar[seat].setFillStyle(0x00FF00);
-                timeBar[(seat + 1) % 4].setFillStyle(0xdddddd);
-                timeBar[(seat + 2) % 4].setFillStyle(0xdddddd);
-                timeBar[(seat + 3) % 4].setFillStyle(0xdddddd);                
+                avatars.activate(seat);               
                 if (game.mySeat == seat) {     // is it me you are looking for?
                     console.log('received a request to choose suit'); 
                     highBidder = game.mySeat;
@@ -150,10 +139,7 @@ export default class Game extends Phaser.Scene {
             });
             this.socket.on('yourPlay', function (seat, trump, trumped, leadpoints) {
                 // Light up the current player's time bar
-                timeBar[seat].setFillStyle(0x00FF00);
-                timeBar[(seat + 1) % 4].setFillStyle(0xdddddd);
-                timeBar[(seat + 2) % 4].setFillStyle(0xdddddd);
-                timeBar[(seat + 3) % 4].setFillStyle(0xdddddd);
+                avatars.activate(seat);
                 if (seat == game.mySeat) {     
                     //console.log('received a request to play. trump:' + trump + ' leadpoints:' + leadpoints + 'T?:' + trumped); 
                     game.players[game.mySeat].makePlayable(game, trump, trumped, leadpoints);
@@ -161,12 +147,7 @@ export default class Game extends Phaser.Scene {
             });     
             this.socket.on('pitterPatter', function (currentPlayer, timeRemaining, state = -1) {
                 var targets = [];
-                timerTween = game.tweens.add({   
-                    targets: timeBar[currentPlayer],
-                    width: 210 * timeRemaining/100,
-                    ease: 'Power1',
-                    duration: 200,
-                });
+                avatars.decreaseTimer(currentPlayer, timeRemaining);
                 //timeBar[currentPlayer].width = 210 * timeRemaining;
             });
             this.socket.on('cardPlayed', function (seat, cardIndex) {
@@ -250,38 +231,19 @@ export default class Game extends Phaser.Scene {
         }
         
         this.displayBid = (player, thisBid) => {
-            var bidText = (thisBid == 0) ? '' : ' ' + thisBid;
+            
             console.log('Displaying bid for player ' + player);
             bBar.hideBidButtons();
             var y = this.players[player].y - 25;
-            timerTween.remove();              // Stop ticking down
+            //timerTween.remove();              // Stop ticking down
             
-            if (thisBid != 0) {
-                this.bubbleText[player].setText(bidText);
-                //timeBar[player].setFillStyle(0xdddddd);
-                let tween = this.add.tween({
-                    targets: this.bubbleText[player], duration: 300, ease: 'Exponential.In', alpha : 1,
-                    onComplete: () => {
-                            timeBar[player].setFillStyle(0xdddddd);
-                            timeBar[player].width = 210;    // Restore the timer
-                    }, callbackScope: this
-                });        
-            } else {
-                this.bubbleText[player].setText('');
-                let tween = this.add.tween({
-                    targets: avatar[player], duration: 300, ease: 'Exponential.In', alpha : 0.2,
-                    onComplete: () => {
-                            timeBar[player].setFillStyle(0xdddddd);
-                            timeBar[player].width = 210;    // Restore the timer
-                    }, callbackScope: this
-                });                 
-            }
-            game.text3.setVisible(false);
-            element.setVisible(false);
-            instructions_panel.setVisible(false);   // Time to phase out the instruction panel
+            avatars.setBidText(player, thisBid);
+            game.instructions_text.setVisible(false);
+            avatars.removeNameField();
+            game.instructions_panel.setVisible(false);   // Time to phase out the instruction panel
         }
         
-        this.nextBid = () => { 
+/*        this.nextBid = () => { 
             console.log('entering nextBid and currentPlayer is '+ currentPlayer);
             timeBar[currentPlayer].setFillStyle(0x00FF00);
             var thisBid = 0;
@@ -312,7 +274,7 @@ export default class Game extends Phaser.Scene {
                 game.socket.emit("requestBid", currentPlayer, highBid, game.dealer);   // ask guest to bid
             }
         }
-        
+  */      
         this.receiveBidPrompt = (highBid, dealer) => {
             bBar.activateBidButtons(highBid, dealer, game.mySeat);
         }
@@ -320,20 +282,6 @@ export default class Game extends Phaser.Scene {
         this.registerBid = (thisBid) => {
             console.log('Telling the server that I just bid.');
             game.socket.emit("playerBid", game.mySeat, thisBid);   // tell everyone else
-        }
-        
-        var suitSymbol = (suitItem) => {
-            if (suitItem == 0) {
-                return '&'; //clubs
-            } else if (suitItem == 1) {
-                return '#'; // hearts
-            } else if (suitItem == 2) {
-                return '+'; // spades
-            } else if (suitItem == 3){
-                return '@'; // diamonds
-            } else {
-                return 'X';
-            }
         }
         
         this.trumpCount = (hand, t) => {
@@ -366,7 +314,7 @@ export default class Game extends Phaser.Scene {
         this.playedCards = [];
         this.players = [];
         this.bubbles = [];
-        this.nameText = [];
+       
         let scoresheet = this.add.image(1090, 80, 'scores').setScale(0.3).setInteractive();
         
         var score = [0, 0];
@@ -397,104 +345,12 @@ export default class Game extends Phaser.Scene {
         this.players[3].generate(1000, 410, this);
         this.players[4].generate(1072, 765, this);
       
-        var instructions_panel = this.add.rectangle(this.players[0].x + 70, this.players[1].y, 400, 100, 0xffffff);
-        instructions_panel.setFillStyle(0x222222).setDepth(2000).setAlpha(0.75);
-        this.text3 = this.add.text(515, 390, 'Select a seat', { font: '48px Calibri', fill: '#ffffff' });
-        this.text3.setDepth(2001);
+        this.instructions_panel = this.add.rectangle(this.players[0].x + 70, this.players[1].y, 400, 100, 0xffffff);
+        this.instructions_panel.setFillStyle(0x222222).setDepth(2000).setAlpha(0.75);
+        this.instructions_text = this.add.text(515, 390, 'Select a seat', { font: '48px Calibri', fill: '#ffffff' });
+        this.instructions_text.setDepth(2001);
         
-        var avatar = [];
-        var timeBar = [];
-        this.bubbleText = [];
-        for (let i = 0; i < 4; i++) {   // Initialize the interface
-            this.nameText.push(this.add.bitmapText(game.players[i].x - 22, this.players[i].y - 20, 'gothic2', '', 24));
-            this.nameText[i].setDepth(2001);
-            this.bubbleText.push(this.add.bitmapText(game.players[i].x + 107, game.players[i].y - 25, 'gothic2', '', 32).setAlpha(0).setDepth(2001));
-            avatar.push(this.add.rectangle(this.players[i].x + 70, this.players[i].y, 210, 60, 0xffffff));
-            avatar[i].setFillStyle(0x222222).setDepth(2000).setAlpha(0.75).setInteractive();
-            avatar[i].on('pointerover', function () {
-                if (this.fillColor == (0x222222)) {
-                    this.setFillStyle(0x00AA00);
-                }
-            });      
-            avatar[i].on('pointerout', function () {
-                if (this.fillColor == (0x00AA00)) {
-                    this.setFillStyle(0x222222);
-                }
-            });    
-            self = this;
-            avatar[i].on('pointerdown', function () {
-                this.setFillStyle(0x007700);    // shade green and block the other seats
-                avatar[0].disableInteractive();  
-                avatar[1].disableInteractive();  
-                avatar[2].disableInteractive();  
-                avatar[3].disableInteractive();
-                game.mySeat = i;
-                game.socket.emit('takeSeat', i);    // Tell the server you reserved a seat
-                
-                self.tweens.add({
-                    targets: [self.text3, self.instructions_panel],
-                    alpha: 0,
-                    yoyo: true,
-                    ease: 'Power1',
-                    duration: 300,
-                    onYoyo: function () {
-                            self.text3.setX(485).setY(360).setText("Enter your name");
-                            instructions_panel.setY(365).setSize(400,210);
-                    },
-                    onComplete: function () {
-                            element = self.add.dom(avatar[0].x, avatar[1].y+40).createFromCache('nameform');
-                            var el = document.createElement('select');
-                            element.setPerspective(800);
-                            element.addListener('click');
-                            element.on('click', function (event) {
-                                if (event.target.name === 'playButton')
-                                {
-                                    var inputText = this.getChildByName('nameField');
-                                    //  Have they entered anything?
-                                    if (inputText.value !== '')
-                                    {
-                                        //  Turn off the click events
-                                        this.removeListener('click');
-                        
-                                        //  Hide the login element
-                                        this.setVisible(false);
-                                        instructions_panel.setVisible(false);
-                                        self.text3.setVisible(false);
-                        
-                                        //  Populate the name bar with whatever they typed in
-                                        game.nameText[i].setText(inputText.value);
-                                        game.character[i].setVisible(false);
-                                        game.socket.emit('setName', game.mySeat, inputText.value); // Tell the server you now have a name
-                                    }
-                                    else
-                                    {
-                                        //  Flash the prompt
-                                        this.scene.tweens.add({
-                                            //targets: text,
-                                            alpha: 0.2,
-                                            duration: 250,
-                                            ease: 'Power3',
-                                            yoyo: true
-                                        });
-                                    }
-                                }
-                        
-                            });
-                    }
-                });
-
-            });    
-            
-            timeBar.push(this.add.rectangle(this.players[i].x + 70, this.players[i].y + 25, 210, 10, 0xffffff));
-            timeBar[i].setFillStyle(0xdddddd).setDepth(2001);
-            
-            
-        }
-        this.character = [];
-        for (let i = 0; i < 4; i++) {
-            this.character.push(this.add.image(game.players[i].x + 0, game.players[i].y - 5, 'robot_' + i).setScale(0.3).setDepth(2001));
-        }
-        
+        var avatars = new PlayerDisplay(this.players, game);
         
         this.took = [0, 0, 0, 0];   // how many extra cards each player asked for
         this.trumpsLeft = [0, 0, 0, 0];
@@ -528,7 +384,7 @@ export default class Game extends Phaser.Scene {
         this.showSuit = (highBid, bestSuit) => {
             highBidder = game.mySeat;
             game.bidding = false;
-            game.bubbleText[highBidder].setText(highBid +suitSymbol(bestSuit));
+            avatars.addSuitSymbol(highBidder, highBid, bestSuit);
             game.socket.emit("selectedSuit", game.mySeat, bestSuit);     
         };
         
@@ -537,11 +393,8 @@ export default class Game extends Phaser.Scene {
             game.bidding = false;
             highBidder = hb; // storing locally in the guest for use later
             game.players[highBidder].bestSuit = bestSuit;
-            game.bubbleText[hb].setText(highBid + suitSymbol(bestSuit));
-            for (var i=0; i<4; i++) {
-                avatar[i].setAlpha(0.75);
-                timeBar[i].setFillStyle(0x00ff00);
-            }
+            avatars.addSuitSymbol(hb, highBid, bestSuit);
+            avatars.activateAll();
             this.preSelect(highBidder, bestSuit);
             bBar.activateDiscardButton();
         };
@@ -572,7 +425,7 @@ export default class Game extends Phaser.Scene {
         }
         
         this.lockInDiscards = () => {
-            timeBar[game.mySeat].width = 210;
+            avatars.deactivateTimer(game.mySeat);
             let discards = [];
             let cardsToPickUp = [];
             // Now let's see what is actually discarded
@@ -634,7 +487,7 @@ export default class Game extends Phaser.Scene {
         }
         
         this.showReceivedDiscards = (seat, discards) => {
-            timeBar[seat].width = 210;
+            avatars.deactivateTimer(seat);
             let localSeat = seat; 
             console.log('processing discards received from seat ' + seat + '. and i am ' + game.mySeat);
             for (let i = 0; i < discards.length; i++) {
@@ -650,37 +503,27 @@ export default class Game extends Phaser.Scene {
         this.showReceivedPlay = (seat, cardIndex) => {
             game.playedCards.unshift(game.players[seat].playerCards[cardIndex]);
             game.players[seat].playerCards[cardIndex].setPlayed();
-            timeBar[seat].setFillStyle(0xffffff);
             game.playsIn++;
             game.players[seat].slideItIn(game, cardIndex);    
         }
         
         this.sweepTrick = (winner) => {
-            //game.sweepDirection = winner;  deprecated
-            this.trickTally[(winner + game.mySeat) % 2].setText(this.trickTally[(winner + game.mySeat) % 2].text + '★');
+            this.trickTally[(winner + game.mySeat) % 2].setText(this.trickTally[(winner + game.mySeat) % 2].text + '★');    // Mark a trick won
             game.playsIn = 0;
-            //game.sweepDirection = -1; deprecated
             let myTargets = [];
             for (let i = 0; ((i < game.playedCards.length) && (i < 4)); i++) {
                 myTargets.push(game.playedCards[i].pic);
             }
-            //console.log('sweeping targets (' + myTargets.length + '): ' + game.cardArrayPrint(game.playedCards));
-            //console.log(game.cardArrayPrint(game.players[0].playerCards) + '  ' + game.cardArrayPrint(game.players[1].playerCards) + '  ' + game.cardArrayPrint(game.players[2].playerCards) + '  ' + game.cardArrayPrint(game.players[3].playerCards));
             game.socket.emit('boardClear', game.mySeat);        
          
             game.tweens.add({
                 targets: myTargets,
-                x: game.bubbleText[winner].x,
-                y: game.bubbleText[winner].y + 70,  // line up with cards
+                x: game.players[winner].x,
+                y: game.players[winner].y + 70,  // line up with cards
                 ease: 'Power1',
                 duration: 300,  // how fast they sweep away
                 delay: 700, // how long to wait in the middle
                 onStart: function () {              // notify the server that the board is clear and then add sparkles
-                    /*for (let i = 0; i < 4; i++) {
-                        if (i == game.mySeat) {
-                            game.socket.emit('boardClear', game.mySeat);        
-                        }
-                    }*/
                     game.players[winner].lightUp(this, myTargets, winner, game);
                 },
                 onComplete: function () {
@@ -718,20 +561,13 @@ export default class Game extends Phaser.Scene {
                         x: dealerx,
                         y: dealery,
                         ease: 'Power1',
-                        delay: 200,
+                        delay: 1200,    // Don't take away cards until the trick sweep is completed.
                         duration: 100 * (a+b)
                     });
                 }
                 game.players[a].playerCards = [];   // Delete the locally stored players
             }
-            game.bubbleText[0].setText('');     // Erase previous bids
-            game.bubbleText[1].setText('');
-            game.bubbleText[2].setText('');
-            game.bubbleText[3].setText(''); 
-            avatar[0].setAlpha(1);  // Restore the avatars
-            avatar[1].setAlpha(1);
-            avatar[2].setAlpha(1);
-            avatar[3].setAlpha(1);            
+            avatars.clearBids();          
         }
     }
     

@@ -59,7 +59,7 @@ export default class Player {
             scale: { start: 1, end: 0 },
             blendMode: 'ADD'
         });
-        game.time.delayedCall(1050, ()=>{
+        game.time.delayedCall(800, ()=>{
             emitter.stop();
         });
 
