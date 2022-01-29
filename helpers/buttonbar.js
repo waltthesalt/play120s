@@ -38,26 +38,26 @@ export default class ButtonBar {
             self.game.players[0].bid = 0;
             self.game.displayBid(self.userSeat, 0);
             self.game.registerBid(0);
-            self.hideBidButtons();
+            //self.hideBidButtons();    // now handled in displayBid
         })     
         this.buttons[1].on('pointerdown', function () {
             console.log('player '+self.userSeat+' bid 20');
             self.game.players[0].bid = 20;
             self.game.displayBid(self.userSeat, 20);
             self.game.registerBid(20);
-            self.hideBidButtons();
+            //self.hideBidButtons();
         })
         this.buttons[2].on('pointerdown', function () {
             self.game.players[0].bid = 25;
             self.game.displayBid(self.userSeat, 25);
             self.game.registerBid(25);
-            self.hideBidButtons();
+            //self.hideBidButtons();
         })
         this.buttons[3].on('pointerdown', function () {
             self.game.players[0].bid = 30;
             self.game.displayBid(self.userSeat, 30);
             self.game.registerBid(30);
-            self.hideBidButtons();
+            //self.hideBidButtons();
         })   
   
     }

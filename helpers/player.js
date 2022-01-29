@@ -96,35 +96,37 @@ export default class Player {
         console.log('trump count:'+trumpsTicker+' renegable count:'+renegableTicker);
         var self = this;
         this.playerCards.forEach(function(item, index) {
-            item.pic.setInteractive();
-            item.pic.off('pointerup');
-            //console.log('Removing stale listener from ' + index);
-            
-            if (item.isTrump(tSuit) || (((!trumped) || (trumpsTicker == 0) || (renegableTicker == trumpsTicker)))) {
-                item.pic.on('pointerover', function() {
-                    this.setTint(0x88ff88); // This card in is an option so shade it green
-                    //console.log('Allowing card '+index);
-                });  
-            } else {
-                // board is trumped and you have non-renegable trumps
-                item.pic.on('pointerover', function() {
-                    this.setTint(0xff8888); // This card is not an option so shade it red
-                    //console.log('Disallowing card '+index);
+            if (!item.isPlayed()) {     // Don't make cards playable if they are gone from the hand
+                item.pic.setInteractive();
+                item.pic.off('pointerup');
+                //console.log('Removing stale listener from ' + index);
+                
+                if (item.isTrump(tSuit) || (((!trumped) || (trumpsTicker == 0) || (renegableTicker == trumpsTicker)))) {
+                    item.pic.on('pointerover', function() {
+                        this.setTint(0x88ff88); // This card in is an option so shade it green
+                        //console.log('Allowing card '+index);
+                    });  
+                } else {
+                    // board is trumped and you have non-renegable trumps
+                    item.pic.on('pointerover', function() {
+                        this.setTint(0xff8888); // This card is not an option so shade it red
+                        //console.log('Disallowing card '+index);
+                    });
+                }
+                
+    
+                item.pic.on('pointerout', function() {
+                    this.clearTint();
                 });
+                if (item.isTrump(tSuit) || (((!trumped) || (trumpsTicker == 0) || (renegableTicker == trumpsTicker)))) {    // only set the listener for legal plays
+                    console.log('activating card ' + index);
+                    item.pic.on('pointerup', function() {   
+                        self.makeUnplayable(game);
+                        game.socket.emit("cardPlayed", game.mySeat, index); // Telling the server
+                        game.showReceivedPlay(game.mySeat, index);          // Show it on my screen right away to avoid server lag
+                    });
+                }    
             }
-            
-
-            item.pic.on('pointerout', function() {
-                this.clearTint();
-            });
-            if (item.isTrump(tSuit) || (((!trumped) || (trumpsTicker == 0) || (renegableTicker == trumpsTicker)))) {    // only set the listener for legal plays
-                console.log('activating card ' + index);
-                item.pic.on('pointerup', function() {   
-                    self.makeUnplayable(game);
-                    game.socket.emit("cardPlayed", game.mySeat, index); // Telling the server
-                    game.showReceivedPlay(game.mySeat, index);          // Show it on my screen right away to avoid server lag
-                });
-            }    
         });
     }
     
