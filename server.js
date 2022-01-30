@@ -115,7 +115,6 @@ io.on('connection', function (socket) {
             playedCards = [];
             playerSeats = [];
             bubbles = [];
-            clearInterval(gameInterval);
         }
         
         playerSeats.push(seat);
@@ -143,12 +142,11 @@ io.on('connection', function (socket) {
     socket.on('selectedSuit', function (seat, bestSuit) {
         trumpSuit = bestSuit;
         discardsIn = [];
-        clearInterval(gameInterval);
         gameState = DISCARDING;
         gameClock = 100;    // Reset the clock
         io.sockets.in("room-"+roomno).emit('receivedSuitfromServer', highBidder, highBid, trumpSuit);   // Start the discarding
         console.log('starting timer on suits');
-        gameInterval = setInterval(pitterPatter, 2000);
+        pitterPatter(true);
     });
     
     socket.on('tookCardsFromKit', function (kitCards) {
@@ -198,7 +196,6 @@ io.on('connection', function (socket) {
     });   
     
     socket.on('cardPlayed', function (seat, cardIndex) {
-        clearInterval(gameInterval);    // Reset the timer
         gameClock = 100;
         io.sockets.in("room-"+roomno).emit('cardPlayed', seat, cardIndex);  // Tell it to all the players
         //console.log('received the '+players[seat].playerCards[cardIndex].rank + ' of ' + players[seat].playerCards[cardIndex].suit + ' from server (trumps is '+trumpSuit+ ').');
@@ -332,6 +329,9 @@ io.on('connection', function (socket) {
         highBid = 0;
         highBidder = -1;
         console.log('A user disconnected: ' + socket.id + ' from seat ' + seatWhoLeft + ' leaving ' + playerSockets.length + ' connections.');
+        if (playerSockets.length == 0) {
+            clearTimeout(gameInterval);     // Don't leave any ghost timers on
+        }
         io.sockets.in("room-"+roomno).emit('playerLeftTable', seatWhoLeft);
 
     });
@@ -370,12 +370,10 @@ var nextBid = () => {
     // invite a guest to bid
     io.sockets.in("room-"+roomno).emit("requestBid", currentPlayer, highBid, dealer);   // ask guests to bid
     console.log('starting timer on bids');
-    gameInterval = setInterval(pitterPatter, 1500);  // How fast to move the clock
+    pitterPatter();
 };
 
 var processBid = (seat, bid) => {
-    clearInterval(gameInterval);    // Reset the timer
-    gameClock = 100;
     io.sockets.in("room-"+roomno).emit('receivedBidfromServer', seat, bid); // Tell everyone else
     console.log('Current highBid is ' + highBid + ' and highBidder is '+ highBidder);
     if (bid > highBid) {    // a new high bid
@@ -427,12 +425,11 @@ var processBid = (seat, bid) => {
         currentPlayer = highBidder;
         io.sockets.in("room-"+roomno).emit('requestSuit', highBidder, highBid, dealer);
         console.log('starting timer on suits');
-        gameInterval = setInterval(pitterPatter, 1500);  // How fast to move the clock
+        pitterPatter();
     }
 }
 
 var fillHands = () => {
-    clearInterval(gameInterval);    // Reset the timer
     gameClock = 100;
     // Now draw cards from the pack
     var topPack = 23;   // next card to draw out
@@ -472,43 +469,33 @@ var nextPlay = (startingPointsToBeat = 0, startingPlayerToBeat = 0, whistToBoard
     io.sockets.in("room-"+roomno).emit("yourPlay", currentPlayer, trumpSuit, whistToBoard, startingPointsToBeat);
     // And start a timer
     console.log('starting timer on plays');
-    gameInterval = setInterval(pitterPatter, 1500);
+    pitterPatter();
 };
 
 var pitterPatter = () => {
-    gameClock = gameClock - 5;
-    if ((gameClock >=0) && (gameState == DISCARDING)) {
+    //io.sockets.in("room-"+roomno).emit("pitterPatter", currentPlayer, gameClock, gameState);
+    clearInterval(gameInterval);
+    gameInterval = setTimeout(timesUp, 30000);
+};
+
+var timesUp = () => {
+    if (gameState == BIDDING) {
+        processBid(currentPlayer, 0);               // Force the bidder to Pass
+    } else if (gameState == SELECTING) {
+        trumpSuit = Math.floor(Math.random() * 4);  // Force the highBidder to pick a random suit
+        discardsIn = [];
+        gameState = DISCARDING;
+        io.sockets.in("room-"+roomno).emit('receivedSuitfromServer', highBidder, highBid, trumpSuit); 
+    } else if (gameState == DISCARDING) {           // Force the players to discard highlighted cards
         for (var i=0; i<4; i++) {
-            if (!discardsIn.includes(i)) {
-                io.sockets.in("room-"+roomno).emit("pitterPatter", i, gameClock, gameState);
+            if (!discardsIn.includes(i)) {  // Only force the players who haven't already responded
+                io.sockets.in("room-"+roomno).emit('forceDiscardButton', i);     
             }
         }
-    } else if (gameClock >= 0) {
-        io.sockets.in("room-"+roomno).emit("pitterPatter", currentPlayer, gameClock, gameState);
-    } else {
-        // Time has expired, need to force an action.
-        clearInterval(gameInterval);    // Reset the clock
-        gameClock = 100;
-        console.log('Resetting clock');
-        if (gameState == BIDDING) {
-            processBid(currentPlayer, 0);               // Force the bidder to Pass
-        } else if (gameState == SELECTING) {
-            trumpSuit = Math.floor(Math.random() * 4);  // Force the highBidder to pick a random suit
-            discardsIn = [];
-            gameState = DISCARDING;
-            io.sockets.in("room-"+roomno).emit('receivedSuitfromServer', highBidder, highBid, trumpSuit); 
-        } else if (gameState == DISCARDING) {           // Force the players to discard highlighted cards
-            for (var i=0; i<4; i++) {
-                if (!discardsIn.includes(i)) {  // Only force the players who haven't already responded
-                    io.sockets.in("room-"+roomno).emit('forceDiscardButton', i);     
-                }
-            }
-        } else if (gameState == PLAYING) {              // Force the player to play the first legal card
-            console.log('Go to AI');
-        }
+    } else if (gameState == PLAYING) {              // Force the player to play the first legal card
+        console.log('Go to AI');
     }
-    //console.log('lets get at er '+gameClock+'. gameState is '+gameState);
-}
+};
 
 var tallyUpHand = () => {
     misdeal = false;

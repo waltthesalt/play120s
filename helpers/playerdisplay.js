@@ -7,6 +7,7 @@ export default class PlayerDisplay {
         this.character = [];
         this.scene = scene;
         this.activePlayer = -1;
+        this.timerTween = [null,null,null,null];
         for (let i = 0; i < 4; i++) {   // Initialize the interface
             this.nameText.push(scene.add.bitmapText(playerArray[i].x - 22, playerArray[i].y - 20, 'gothic2', '', 24));
             this.nameText[i].setDepth(2001);
@@ -134,25 +135,57 @@ export default class PlayerDisplay {
         this.timeBar[3].width = 210;
     }
     deactivateTimer(seat) {
+        //console.log('deactivateTimer('+seat+') this.timebar size is ' + this.timeBar[seat].width+'. counting '+this.scene.tweens.getTweensOf(this.timeBar[seat]).length+' tweens');
+        this.timerTween[seat].stop();
         this.timeBar[seat].setFillStyle(0xFFFFFF);
         this.timeBar[seat].width = 210;
     }
-    decreaseTimer(seat, timeRemaining) {
-        var timerTween = this.scene.tweens.add({   
+    setTimer(seat, timeRemaining = 0) {
+        //console.log('setTimer tweens: ' +this.timerTween);
+
+        for (var i=0;i<4;i++) {
+            if (this.timerTween[i] != null) {
+                //console.log('stopping tween '+i);
+                this.timerTween[i].stop();
+                this.timerTween[i] = null;
+            }
+        }
+        this.timeBar[seat].width = 210;  
+        this.timerTween[seat] = this.scene.tweens.add({   
             targets: this.timeBar[seat],
-            width: 210 * timeRemaining/100,
+            width: 0,
             ease: 'linear',
-            duration: 200,
-            onComplete: () => {
-                console.log('color '+this.timeBar[seat].color+' tint '+this.timeBar[seat].tintTopLeft);
+            duration: 30000,
+            /*onComplete: () => {
+                //console.log('color '+this.timeBar[seat].color+' tint '+this.timeBar[seat].tintTopLeft);
                 if ((this.activePlayer != seat) && (this.activePlayer != 5)) {   // Don't let display lag leave an inactive avatar with low timeBar
                     this.timeBar[seat].width = 210;  
                 }
-                if (this.timeBar[seat].tintTopLeft == 0xFFFFFF) {
-                    this.timeBar[seat].width = 210;  
+                if (this.activePlayer == 5) {
+                    console.log('5:this.timebar size for seat ' + seat+' is ' + this.timeBar[seat].width+'. counting '+this.scene.tweens.getTweensOf(this.timeBar[seat]).length+' tweens');
                 }
-            }, callbackScope: this
+            }, callbackScope: this*/
         });
+    }
+    setAllTimers() {
+        //console.log('setAllTimers all timers tick');
+        for (var i=0;i<4;i++) {
+            if (this.timerTween[i] != null) {
+                //console.log('stopping tween '+i);
+                this.timerTween[i].stop();
+                this.timerTween[i] = null;
+            }
+        }       
+        for (var i=0;i<4;i++) {
+            this.timeBar[i].width = 210;  
+            this.timerTween[i] = this.scene.tweens.add({   
+                targets: this.timeBar[i],
+                width: 0,
+                ease: 'linear',
+                duration: 30000,
+            });
+        }
+        
     }
     setBidText(player, bid) {
         this.timeBar[player]. width = 210;

@@ -94,6 +94,7 @@ export default class Game extends Phaser.Scene {
             });    
             this.socket.on('requestBid', function (seat, highBid, dealer) {
                 avatars.activate(seat);
+                avatars.setTimer(seat);
                 game.trickTally[0].setText('');   // Good time to clear the trick counter
                 game.trickTally[1].setText('');
                 if ((game.mySeat == seat)) {     // is it me you are looking for?   
@@ -102,7 +103,8 @@ export default class Game extends Phaser.Scene {
                 }
             });
             this.socket.on('requestSuit', function (seat, highBid, dealer) {
-                avatars.activate(seat);               
+                avatars.activate(seat);     
+                avatars.setTimer(seat);
                 if (game.mySeat == seat) {     // is it me you are looking for?
                     console.log('received a request to choose suit'); 
                     highBidder = game.mySeat;
@@ -140,14 +142,18 @@ export default class Game extends Phaser.Scene {
             this.socket.on('yourPlay', function (seat, trump, trumped, leadpoints) {
                 // Light up the current player's time bar
                 avatars.activate(seat);
+                avatars.setTimer(seat);
                 if (seat == game.mySeat) {     
                     //console.log('received a request to play. trump:' + trump + ' leadpoints:' + leadpoints + 'T?:' + trumped); 
                     game.players[game.mySeat].makePlayable(game, trump, trumped, leadpoints);
                 }
             });     
             this.socket.on('pitterPatter', function (currentPlayer, timeRemaining, state = -1) {
-                var targets = [];
-                avatars.decreaseTimer(currentPlayer, timeRemaining);
+                if (state == 3) {   // this means DISCARDING
+                    avatars.setAllTimers();
+                } else {
+                    avatars.setTimer(currentPlayer, timeRemaining); 
+                }
                 //timeBar[currentPlayer].width = 210 * timeRemaining;
             });
             this.socket.on('cardPlayed', function (seat, cardIndex) {
@@ -235,46 +241,15 @@ export default class Game extends Phaser.Scene {
             console.log('Displaying bid for player ' + player);
             bBar.hideBidButtons();
             var y = this.players[player].y - 25;
-            //timerTween.remove();              // Stop ticking down
             
+            //avatars.deactivateTimer(player);
             avatars.setBidText(player, thisBid);
+            
             game.instructions_text.setVisible(false);
             avatars.removeNameField();
             game.instructions_panel.setVisible(false);   // Time to phase out the instruction panel
         }
-        
-/*        this.nextBid = () => { 
-            console.log('entering nextBid and currentPlayer is '+ currentPlayer);
-            timeBar[currentPlayer].setFillStyle(0x00FF00);
-            var thisBid = 0;
-            if (this.players[currentPlayer].isComputer) {
-                // find out what the hand is worth
-                thisBid = this.players[currentPlayer].aiBid();
-                // now let's see if that bid is available and makes sense
-                if ((thisBid > highBid) && (currentPlayer != game.dealer)) {
-                    // makes sense, this bid is viable
-                } else if ((currentPlayer == game.dealer) && (thisBid >= highBid)) {
-                    if (highBid > 0) {
-                        thisBid = highBid; // Dealer can call
-                    } else if (thisBid > 0) {
-                        thisBid = 20; // Dealer limps in
-                    }
-                } else if ((currentPlayer == game.dealer) && (thisBid == 0)) {
-                    
-                } else {          
-                    thisBid = 0;    // have to pass
-                }  
-                this.displayBid(currentPlayer, thisBid);
-                this.registerBid(thisBid);
-            } else if (currentPlayer == 0) {    // the host can bid now  
-                console.log('Thats me, raise the bid buttons');
-                bBar.activateBidButtons(highBid, game.dealer);
-            } else if ((game.hosting) && (!this.players[currentPlayer].isComputer)) {
-                // invite a guest to bid
-                game.socket.emit("requestBid", currentPlayer, highBid, game.dealer);   // ask guest to bid
-            }
-        }
-  */      
+
         this.receiveBidPrompt = (highBid, dealer) => {
             bBar.activateBidButtons(highBid, dealer, game.mySeat);
         }
@@ -395,6 +370,7 @@ export default class Game extends Phaser.Scene {
             game.players[highBidder].bestSuit = bestSuit;
             avatars.addSuitSymbol(hb, highBid, bestSuit);
             avatars.activateAll();
+            avatars.setAllTimers();
             this.preSelect(highBidder, bestSuit);
             bBar.activateDiscardButton();
         };
@@ -425,7 +401,6 @@ export default class Game extends Phaser.Scene {
         }
         
         this.lockInDiscards = () => {
-            avatars.deactivateTimer(game.mySeat);
             let discards = [];
             let cardsToPickUp = [];
             // Now let's see what is actually discarded
@@ -477,13 +452,7 @@ export default class Game extends Phaser.Scene {
                 console.log('lockInDiscards telling server discards are '+discards);
                 game.socket.emit("announceDiscards", game.mySeat, discards); 
             }
-            for (var c = 0; c < 5; c++) {
-                if (game.players[game.mySeat].playerCards[c].isScrapped()) {
-                    console.log('card '+c+' is scrapped');
-                } else {
-                    console.log('card '+c+' is alive');
-                }
-            }
+            avatars.deactivateTimer(game.mySeat);
         }
         
         this.showReceivedDiscards = (seat, discards) => {
