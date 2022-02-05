@@ -30,7 +30,8 @@ export default class Pack {
             }
             fullArr = fullArr + this.cards[i].rank.substring(0,1) + niceSymbol + ' ';
         }
-        console.log(fullArr);
+        //console.log(fullArr);
+        return fullArr;
     }
     
     createTrumps(i) {

@@ -9,46 +9,51 @@ export default class Player {
         this.playerCards = []; // Start with an empty hand
         this.x = x;
         this.y = y;
-
-        this.generate = (x, y, scene) => {
-            var suitnames = ['clubs', 'hearts', 'spades', 'diamonds'];
-            for (let i = 0; i < this.playerCards.length; i++) {
-                this.x = x;
-                this.y = y;
-                // just off screen near the dealer
-                if (scene.dealer == 0) {
-                    var dealerx = scene.players[scene.dealer].x;
-                    var dealery = 1050;
-                } else if (scene.dealer == 1) {
-                    var dealerx = -50;
-                    var dealery = scene.players[scene.dealer].y;
-                } else if (scene.dealer == 2) {
-                    var dealerx = scene.players[scene.dealer].x;
-                    var dealery = -125;
-                } else {
-                    var dealerx = 1350;
-                    var dealery = scene.players[scene.dealer].y;                    
-                }
-                if (this.index == 0) {
-                    this.playerCards[i].render(dealerx, dealery, 'cards', suitnames[this.playerCards[i].suit]+''+this.playerCards[i].rank, scene);
-                } else {
-                    this.playerCards[i].render(dealerx, dealery, 'cards', 'back', scene);
-                }
-            }   
+    }
+    
+    copyPlayer() {
+        var newP = new Player(this.index, this.isComputer);
+        for (var i=0;i < this.playerCards.length;i++) {
+            newP.playerCards.push(this.playerCards[i]);
         }
-        this.render = (x, y, scene) => {
-            var suitnames = ['clubs', 'hearts', 'spades', 'diamonds'];
-            for (let i = 0; i < this.playerCards.length; i++) {
-                this.x = x;
-                this.y = y;
-                if (this.index == 0) {
-                    this.playerCards[i].render(x + (i * 36), y, 'cards', suitnames[this.playerCards[i].suit]+''+this.playerCards[i].rank, scene);
-                } else {
-                    this.playerCards[i].render(x + (i * 36), y, 'cards', 'back', scene);
-                }
-            }
+        return newP;
+    }
+    
+    getHandValue(trumpSuit) {
+        var val = 0;
+        for (var i=0;i < this.playerCards.length;i++) {
+            val+=this.playerCards[i].getPointsValue(trumpSuit);
         }
-        
+        return val;
+    }
+    
+    findCard(cardToFind) {
+        //console.log('trying to remove the '+ cardToRemove.rank + ' of ' + cardToRemove.suit);
+        const isTheRightCard = (element) => ((element.rank == cardToFind.rank) && (element.suit == cardToFind.suit));
+        var pos = this.playerCards.findIndex(isTheRightCard);
+        if (pos > -1) {
+            //console.log('found it');
+            return pos;
+        } else {
+            console.log('couldnt find the ' + cardToFind.displayCard());
+            console.log('searching in here:'+this.displayHand());
+            return false;
+        }
+    }    
+    
+    removeCard(cardToRemove) {
+        //console.log('trying to remove the '+ cardToRemove.rank + ' of ' + cardToRemove.suit);
+        const isTheRightCard = (element) => ((element.rank == cardToRemove.rank) && (element.suit == cardToRemove.suit));
+        var pos = this.playerCards.findIndex(isTheRightCard);
+        if (pos > -1) {
+            //console.log('found it');
+            this.playerCards.splice(pos, 1);
+            return true;
+        } else {
+            console.log('couldnt find the ' + cardToRemove.rank + ' of ' + cardToRemove.suit);
+            console.log('searching in here:'+this.displayHand());
+            return false;
+        }
     }
     
     lightUp(tween, targets, winner, game) {
@@ -59,7 +64,7 @@ export default class Player {
             scale: { start: 1, end: 0 },
             blendMode: 'ADD'
         });
-        game.time.delayedCall(800, ()=>{
+        game.time.delayedCall(700, ()=>{
             emitter.stop();
         });
 
@@ -165,5 +170,63 @@ export default class Player {
             item.pic.off('pointerout');            
             item.pic.off('pointerup');
         });
+    }
+    
+    displayHand() {
+        var fullArr = '';
+        for (var i = 0; i < this.playerCards.length; i++) {
+            if ((this.playerCards[i].suit) == 0) {
+                var niceSymbol = '♣';
+            } else if ((this.playerCards[i].suit) == 1) {
+                var niceSymbol = '♥';
+            } else if ((this.playerCards[i].suit) == 2) {
+                var niceSymbol = '♠';
+            } else {
+                var niceSymbol = '♦';
+            }
+            fullArr = fullArr + this.playerCards[i].rank.substring(0,1) + niceSymbol + ' ';
+        }
+        //console.log(fullArr);
+        return fullArr;
+    }    
+    
+    unplayedLength() {
+        var len = 0;
+        for (var i = 0; i < this.playerCards.length; i++) {
+            if (!this.playerCards[i].isPlayed()) {
+                len++;
+            } 
+        }
+        return len;
+    }    
+    
+    legalPlays(whistToBoard, trumpSuit, leadPoints = 0) {
+        var trumpsTicker = 0;
+        var renegableTicker = 0;
+        var legals = [];
+        for (var i = 0; i < this.playerCards.length; i++) {
+            if ((!this.playerCards[i].isPlayed()) && (this.playerCards[i].isTrump(trumpSuit))) {
+                trumpsTicker++;
+                if ((((this.playerCards[i].rank == 'Ace') && (this.playerCards[i].suit == 1)) || (this.playerCards[i].rank == 'Jack') || (this.playerCards[i].rank == '5')) && (this.playerCards[i].getPointsValue(trumpSuit) > leadPoints)) {
+                    renegableTicker++;
+                }
+            }        
+        }
+        for (i = 0; i < this.playerCards.length; i++) {
+            if (!this.playerCards[i].isPlayed() && ((!whistToBoard) || (this.playerCards[i].isTrump(trumpSuit)) || (trumpsTicker == 0) || (renegableTicker == trumpsTicker))) {
+                legals.push(this.playerCards[i]);
+            } 
+        }
+        return legals;
+    }    
+    
+    trumpCount(trumpSuit) {
+        var ticker = 0;
+        for (var i = 0; i < this.playerCards.length; i++) {
+            if (!this.playerCards[i].isPlayed() && (this.playerCards[i].isTrump(trumpSuit))) {
+                ticker++;
+            }
+        }
+        return ticker;
     }
 }

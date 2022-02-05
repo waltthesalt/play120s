@@ -31,6 +31,7 @@ export default class PlayerDisplay {
                 self.avatar[1].disableInteractive();  
                 self.avatar[2].disableInteractive();  
                 self.avatar[3].disableInteractive();
+                self.character[i].setVisible(false);    
                 scene.mySeat = i;
                 scene.socket.emit('takeSeat', i);    // Tell the server you reserved a seat
                 
@@ -56,17 +57,18 @@ export default class PlayerDisplay {
                                     //  Have they entered anything?
                                     if (inputText.value !== '')
                                     {
+                                        console.log('Set your name. inputText.value '+inputText.value+ ' i '+i);
                                         //  Turn off the click events
                                         this.removeListener('click');
                         
                                         //  Hide the login element
                                         this.setVisible(false);
                                         scene.instructions_panel.setVisible(false);
-                                        self.text3.setVisible(false);
+                                        self.scene.instructions_text.setVisible(false);
                         
                                         //  Populate the name bar with whatever they typed in
-                                        scene.nameText[i].setText(inputText.value);
-                                        scene.character[i].setVisible(false);
+                                        self.nameText[i].setText(inputText.value);
+                                        self.character[i].setVisible(false);
                                         scene.socket.emit('setName', scene.mySeat, inputText.value); // Tell the server you now have a name
                                     }
                                     else
@@ -96,16 +98,18 @@ export default class PlayerDisplay {
     
     seatTaken(seat) {
         this.avatar[seat].disableInteractive();
+        this.character[seat].setVisible(false);    
         if (this.scene.mySeat != seat) {
             this.avatar[seat].setFillStyle(0x770000); // shade it red
         }
     }
     playerLeft(seat) {
         this.avatar[seat].setInteractive();
-        this.avatar[seat].setFillStyle(0x222222); // shade it grey again
+        this.avatar[seat].setFillStyle(0x222222);   // shade it grey again
+        this.character[seat].setVisible(true);      // add a robot
     }    
     
-    setname(seat, name) {
+    setName(seat, name) {
         if (this.scene.mySeat != seat) {
             this.nameText[seat].setText(name);
             this.character[seat].setVisible(false);    
@@ -198,13 +202,18 @@ export default class PlayerDisplay {
             alpha : 1
         });        
     }
+    
     clearBids() {
-       this.bubbleText[0].setText('');
-       this.bubbleText[1].setText('');
-       this.bubbleText[2].setText('');
-       this.bubbleText[3].setText('');
-       
+        for (var s = 0; s < 4; s++) {
+            this.bubbleText[s].setText('');
+            if (this.timerTween[s] != null) {
+                this.timerTween[s].stop();
+            }
+            this.timeBar[s].setFillStyle(0xFFFFFF);
+            this.timeBar[s].width = 210;       
+        }
     }
+    
     addSuitSymbol(player, bid, suit) {
         var bidText = (bid == 0) ? '' : ' ' + bid;
         var symbol;

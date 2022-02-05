@@ -11,7 +11,7 @@ const BIDDING = 1;
 const SELECTING = 2;
 const DISCARDING = 3;
 const PLAYING = 4;
-//import { io } from "socket.io-client";
+const suitnames = ['clubs', 'hearts', 'spades', 'diamonds'];
 
 //import io from "//cdn.jsdelivr.net/npm/socket.io-client@2/dist/socket.io.js";
 
@@ -21,10 +21,6 @@ export default class Game extends Phaser.Scene {
         super({
             key: 'Game'
         });
-        this.thinking = false;
-        this.thought = 0;
-        this.hosting = false;
-        this.multiplayer = false;
     }
 
     preload() {
@@ -50,134 +46,196 @@ export default class Game extends Phaser.Scene {
     }
 
     create() {
-        var element;
-        var image = this.add.image(640, 450, 'table');
+        this.add.image(640, 450, 'table');
 
         const p = new Pack();
         p.createPack();       // calling our function to fill our array
         p.shufflePack();
         this.bubbleText = []; 
-        //var timerTween;
         let game = this;
-        //this.[player] = this.add.bitmapText(this.players[player].x + 107, y, 'gothic2', bidText, 32).setAlpha(0).setDepth(2001);
-        // multiplayer server
-        this.hostGame = () => {
-            var socket = io();
-            this.socket = socket;
+        
+        this.playedCards = [];
+        this.players = [];
+        this.bubbles = [];
+       
+        let scoresheet = this.add.image(1090, 80, 'scores').setScale(0.3).setInteractive();
+        
+        var score = [0, 0];
+        var tricksWon = [0, 0];
+        this.scoreDisplay = [];
+
+        this.scoreDisplay.push(this.add.bitmapText(scoresheet.x - 50, scoresheet.y - 10, 'gothic2', '', 24).setTint(0x000f55));
+        this.scoreDisplay.push(this.add.bitmapText(scoresheet.x + 26, scoresheet.y - 10, 'gothic2', '', 24).setTint(0x000f55));
+        this.scoreDisplay.push(this.add.bitmapText(scoresheet.x - 50, scoresheet.y - 35, 'gothic2', 'We', 20).setTint(0x000f55));
+        this.scoreDisplay.push(this.add.bitmapText(scoresheet.x + 20, scoresheet.y - 35, 'gothic2', 'They', 20).setTint(0x000f55));
+        
+        this.trickTally = [];
+        this.trickTally.push(this.add.text(scoresheet.x - 45, scoresheet.y + 20, '', { fontSize: 16 }).setTint(0x88aaff));
+        this.trickTally.push(this.add.text(scoresheet.x + 25, scoresheet.y + 20, '', { fontSize: 16 }).setTint(0x88aaff));
+        
+        this.players.push(new Player(0, true, 570, 680));
+        this.players.push(new Player(1, true, 125, 410));
+        this.players.push(new Player(2, true, 570, 150));
+        this.players.push(new Player(3, true, 1000, 410));
+        this.players.push(new Player(4, true, 1072, 765));
+        
+        this.dealer = 1;
+      
+        this.instructions_panel = this.add.rectangle(this.players[0].x + 70, this.players[1].y, 400, 100, 0xffffff);
+        this.instructions_panel.setFillStyle(0x222222).setDepth(2000).setAlpha(0.75);
+        this.instructions_text = this.add.text(515, 390, 'Select a seat', { font: '48px Calibri', fill: '#ffffff' });
+        this.instructions_text.setDepth(2001);
+        
+        var avatars = new PlayerDisplay(this.players, game);
+        
+        this.took = [0, 0, 0, 0];   // how many extra cards each player asked for
+        this.trumpsLeft = [0, 0, 0, 0];
+        this.playsIn = 0;
+        this.pointsToBeat = 0;
+        this.playerToBeat = -1;
+        this.bestTrumpValue = 0;
+        this.bestTrumpPlayer = -1;
+        this.sweepDirection = -1;
+        this.whist = false;
+        this.leadSuit = -1;
+        this.thinking = false;
+        this.mySeat = -1;   
+     
+        var bBar = new ButtonBar(this, 440, 805);
+        var highBidder = -1;
+        this.bidding = true;
+        this.trickNum = 1;
+        
+        
+        var socket = io();
+        this.socket = socket;
+
+        this.socket.on('connect', function () {
+            console.log('Connected!');
+        }); 
+        this.socket.on('connectToRoom', function (datas) {
+            //console.log('room connected: '+ datas);
+        });
+        this.socket.on('reservedSeat', function(seat, dealer, isHost = false) {
+            console.log('Just learned that seat ' + seat + ' is taken.');
+            avatars.seatTaken(seat);
+            game.dealer = dealer;               // Tell the client who the dealer is, i.e. where the cards come from
+            if (isHost) {
+                bBar.activateDealButton(null, null, game, bBar.r);
+            }
+        });
+        this.socket.on('playerLeftTable', function(seat) {
+            console.log('Just learned that player in seat ' + seat + ' has left.');
+            avatars.playerLeft(seat);
+        });            
+        this.socket.on('setName', function (seat, name) {
+            console.log('received ' + name + ' from seat ' + seat);
+            avatars.setName(seat, name);
+        });
+        this.socket.on('dealCards', function (seat, rank, suit, value, showOnScreen, location = -1) {
+            //console.log('received ' + rank + ' of ' + suit); 
+            game.receiveCard(seat, rank, suit, value, showOnScreen, location);
+        });
+        this.socket.on('receivedBidfromServer', function (seat, bid) {
+            console.log('The server told me seat ' + seat + ' bid ' + bid);
+            game.displayBid(seat, bid);
+        });    
+        this.socket.on('requestBid', function (seat, highBid, dealer) {
+            avatars.activate(seat);
+            avatars.setTimer(seat);
+            game.trickTally[0].setText('');   // Good time to clear the trick counter
+            game.trickTally[1].setText('');
+            if ((game.mySeat == seat)) {     // is it me you are looking for?   
+                console.log('received a request to bid'); 
+                game.receiveBidPrompt(highBid, dealer);
+            }
+        });
+        this.socket.on('requestSuit', function (seat, highBid, dealer) {
+            avatars.activate(seat);     
+            avatars.setTimer(seat);
+            if (game.mySeat == seat) {     // is it me you are looking for?
+                console.log('received a request to choose suit'); 
+                highBidder = game.mySeat;
+                bBar.activateSuitButtons(highBid);
+            }
+        });
+        this.socket.on('receivedSuitfromServer', function (highBidder, highBid, bestSuit) {
+            console.log('received a request to show suit'); 
+            game.showReceivedSuit(highBidder, highBid, bestSuit);
+        }); 
+        this.socket.on('forceDiscardButton', function (seat) {
+            if (game.mySeat == seat) {  // Did I run out of time?
+            console.log('Server told me I ran out of discarding time.');
+                bBar.hideDiscardButton(bBar.buttons.length - 1, bBar.r.length - 1);
+                game.lockInDiscards();
+            }
+        });
+        this.socket.on('announceDiscards', function (seat, discards) {
+            if (game.mySeat != seat) {     
+                //console.log('received a list of discards from player ' + seat); 
+                game.showReceivedDiscards(seat, discards);
+            }
+        });
+        this.socket.on('replaceCard', function (seat, location, rank, suit, value) {
+            if (game.mySeat != seat) {     
+                console.log('running the new replaceCard function');
+                var x = game.players[seat].playerCards[location].pic.x;
+                var y = game.players[seat].playerCards[location].pic.y;
+                game.players[seat].playerCards[location].pic.setVisible(false);
+                game.players[seat].playerCards[location] = new Card(suit, rank, value);
+                game.players[seat].playerCards[location].render(x, y, 'cards', 'back', game); //TEST put this back after
+                //game.players[seat].playerCards[location].render(x, y, 'cards', suitnames[game.players[seat].playerCards[location].suit]+''+game.players[seat].playerCards[location].rank, game);
+            }
+        });
+        this.socket.on('yourPlay', function (seat, trump, trumped, leadpoints) {
+            // Light up the current player's time bar
+            avatars.activate(seat);
+            avatars.setTimer(seat);
+            if (seat == game.mySeat) {     
+                //console.log('received a request to play. trump:' + trump + ' leadpoints:' + leadpoints + 'T?:' + trumped); 
+                game.players[game.mySeat].makePlayable(game, trump, trumped, leadpoints);
+            }
+        });     
+        this.socket.on('pitterPatter', function (currentPlayer, timeRemaining, state = -1) {
+            avatars.activate(currentPlayer);
+            avatars.setTimer(currentPlayer); 
+        });
+        this.socket.on('cardPlayed', function (seat, cardIndex) {
+            if (game.mySeat != seat) {  // I already showed my own move
+                game.showReceivedPlay(seat, cardIndex);
+            }
+        });
     
-            this.socket.on('connect', function () {
-                console.log('Connected!');
-            }); 
-            this.socket.on('connectToRoom', function (datas) {
-                //console.log('room connected: '+ datas);
-            });
-            this.socket.on('reservedSeat', function(seat, dealer) {
-                console.log('Just learned that seat ' + seat + ' is taken.');
-                avatars.seatTaken(seat);
-                game.dealer = dealer;               // Tell the client who the dealer is, i.e. where the cards come from
-            });
-            this.socket.on('playerLeftTable', function(seat) {
-                console.log('Just learned that player in seat ' + seat + ' has left.');
-                avatars.playerLeft(seat);
-            });            
-            this.socket.on('setName', function (seat, name) {
-                console.log('received ' + name + ' from seat ' + seat);
-                avatars.setName(seat, name);
-            });
-            this.socket.on('dealCards', function (seat, rank, suit, value, showOnScreen, location = -1) {
-                //console.log('received ' + rank + ' of ' + suit); 
-                game.receiveCard(seat, rank, suit, value, showOnScreen, location);
-            });
-            this.socket.on('receivedBidfromServer', function (seat, bid) {
-                console.log('The server told me seat ' + seat + ' bid ' + bid);
-                game.displayBid(seat, bid);
-            });    
-            this.socket.on('requestBid', function (seat, highBid, dealer) {
-                avatars.activate(seat);
-                avatars.setTimer(seat);
-                game.trickTally[0].setText('');   // Good time to clear the trick counter
-                game.trickTally[1].setText('');
-                if ((game.mySeat == seat)) {     // is it me you are looking for?   
-                    console.log('received a request to bid'); 
-                    game.receiveBidPrompt(highBid, dealer);
-                }
-            });
-            this.socket.on('requestSuit', function (seat, highBid, dealer) {
-                avatars.activate(seat);     
-                avatars.setTimer(seat);
-                if (game.mySeat == seat) {     // is it me you are looking for?
-                    console.log('received a request to choose suit'); 
-                    highBidder = game.mySeat;
-                    bBar.activateSuitButtons(highBid);
-                }
-            });
-            this.socket.on('receivedSuitfromServer', function (highBidder, highBid, bestSuit) {
-                console.log('received a request to show suit'); 
-                game.showReceivedSuit(highBidder, highBid, bestSuit);
-            }); 
-            this.socket.on('forceDiscardButton', function (seat) {
-                if (game.mySeat == seat) {  // Did I run out of time?
-                console.log('Server told me I ran out of discarding time.');
-                    bBar.hideDiscardButton(bBar.buttons.length - 1, bBar.r.length - 1);
-                    game.lockInDiscards();
-                }
-            });
-            this.socket.on('announceDiscards', function (seat, discards) {
-                if (game.mySeat != seat) {     
-                    //console.log('received a list of discards from player ' + seat); 
-                    game.showReceivedDiscards(seat, discards);
-                }
-            });
-            this.socket.on('replaceCard', function (seat, location, rank, suit, value) {
-                if (game.mySeat != seat) {     
-                    console.log('running the new replaceCard function');
-                    var x = game.players[seat].playerCards[location].pic.x;
-                    var y = game.players[seat].playerCards[location].pic.y;
-                    game.players[seat].playerCards[location].pic.setVisible(false);
-                    game.players[seat].playerCards[location] = new Card(suit, rank, value);
-                    let suitnames = ['clubs', 'hearts', 'spades', 'diamonds'];
-                    game.players[seat].playerCards[location].render(x, y, 'cards', 'back', game);
-                }
-            });
-            this.socket.on('yourPlay', function (seat, trump, trumped, leadpoints) {
-                // Light up the current player's time bar
-                avatars.activate(seat);
-                avatars.setTimer(seat);
-                if (seat == game.mySeat) {     
-                    //console.log('received a request to play. trump:' + trump + ' leadpoints:' + leadpoints + 'T?:' + trumped); 
-                    game.players[game.mySeat].makePlayable(game, trump, trumped, leadpoints);
-                }
-            });     
-            this.socket.on('pitterPatter', function (currentPlayer, timeRemaining, state = -1) {
-                if (state == 3) {   // this means DISCARDING
-                    avatars.setAllTimers();
-                } else {
-                    avatars.setTimer(currentPlayer, timeRemaining); 
-                }
-                //timeBar[currentPlayer].width = 210 * timeRemaining;
-            });
-            this.socket.on('cardPlayed', function (seat, cardIndex) {
-                if (game.mySeat != seat) {  // I already showed my own move
-                    game.showReceivedPlay(seat, cardIndex);
-                }
-            });
+        this.socket.on('trickOver', function (winner) {
+            console.log('received trickOver from server. Winner is '+winner);
+            game.sweepTrick(winner);
+        });         
+    
+        this.socket.on('updateScore', function (weScore, theyScore, dealer) {    
+            game.scoreDisplay[game.mySeat % 2].setText(weScore);    // Orient the scores so everyone sees their own score as We
+            game.scoreDisplay[(game.mySeat + 1) % 2].setText(theyScore);
+            game.dealer = dealer;
+            game.receivedHandOver();
+        });    
+    
+        this.socket.on('misdeal', function () {
+            game.receivedHandOver();
+        });
         
-            this.socket.on('trickOver', function (winner) {
-                console.log('received trickOver from server. Winner is '+winner);
-                game.sweepTrick(winner);
-            });         
+        this.socket.on('gameUpdate', function (seatToUpdate, gameState, players, dealer, seat, rank, suit, value, showOnScreen, location = -1) {
+            game.dealer = dealer;
+            if ((gameState = BIDDING) && (game.mySeat == seatToUpdate)) {
+                //game.players = players; // get all the cards from the server
+                for (var s = 0;s < players.length;s++) {
+                    for (var c = 0;c < players[s].playerCards.length;c++) {
+                        game.players[s].playerCards.push(new Card(players[s].playerCards[c].suit, players[s].playerCards[c].rank, players[s].playerCards[c].value));
+                        console.log(s+' '+c+' '+game.players[s].playerCards[c].displayCard());
+                        game.players[s].playerCards[c].render(game.players[s].x + c * 36, game.players[s].y, 'cards', suitnames[game.players[s].playerCards[c].suit]+''+game.players[s].playerCards[c].rank, game);
+                    }
+                }
+            }
+        });
         
-            this.socket.on('updateScore', function (weScore, theyScore, dealer) {    
-                game.scoreDisplay[game.mySeat % 2].setText(weScore);    // Orient the scores so everyone sees their own score as We
-                game.scoreDisplay[(game.mySeat + 1) % 2].setText(theyScore);
-                game.dealer = dealer;
-                game.receivedHandOver();
-            });    
-        
-            this.socket.on('misdeal', function () {
-                game.receivedHandOver();
-            });            
-        };
 
         this.receiveCard = (seat, rank, suit, value, showOnScreen, location = -1) => {
             if (seat == 4) {    
@@ -194,7 +252,7 @@ export default class Game extends Phaser.Scene {
                 game.players[localSeat].playerCards[location] = new Card(suit, rank, value);
                 var i = location;
             }            
-            let suitnames = ['clubs', 'hearts', 'spades', 'diamonds'];
+           
             if (seat == game.mySeat) {
                 console.log('Player ' + seat + ' received ' + rank + ' of ' + suitnames[suit] + ' at position ' + i + '. Scrapped:'+game.players[localSeat].playerCards[i].isScrapped()+' Played:'+game.players[localSeat].playerCards[i].isPlayed());
             }
@@ -213,7 +271,6 @@ export default class Game extends Phaser.Scene {
             }          
         
             if (seat == game.mySeat) { // Should we show the card face up?
-                //if (location != -1) { console.log('Rendered a replaced card at location '+location); }
                 this.players[localSeat].playerCards[i].render(dealerx, dealery, 'cards', suitnames[game.players[localSeat].playerCards[i].suit]+''+game.players[localSeat].playerCards[i].rank, game);  // render the card below the screen and slide in                
             } else {
                 this.players[localSeat].playerCards[i].render(dealerx, dealery, 'cards', 'back', game);
@@ -241,10 +298,8 @@ export default class Game extends Phaser.Scene {
             console.log('Displaying bid for player ' + player);
             bBar.hideBidButtons();
             var y = this.players[player].y - 25;
-            
-            //avatars.deactivateTimer(player);
+
             avatars.setBidText(player, thisBid);
-            
             game.instructions_text.setVisible(false);
             avatars.removeNameField();
             game.instructions_panel.setVisible(false);   // Time to phase out the instruction panel
@@ -258,103 +313,8 @@ export default class Game extends Phaser.Scene {
             console.log('Telling the server that I just bid.');
             game.socket.emit("playerBid", game.mySeat, thisBid);   // tell everyone else
         }
-        
-        this.trumpCount = (hand, t) => {
-            var ticker = 0;
-            for (var i = 0; i < hand.length; i++) {
-                if ((hand[i].suit == t) || ((hand[i].rank == 'Ace') && (hand[i].suit == 1))) {
-                    ticker++;
-                }
-            }
-            return ticker;
-        }
-          
-        this.cardArrayPrint = (cardArray) => {
-            var fullArr = '';
-            for (var i = 0; i < cardArray.length; i++) {
-                if ((cardArray[i].suit) == 0) {
-                    var niceSymbol = '♣';
-                } else if ((cardArray[i].suit) == 1) {
-                    var niceSymbol = '♥';
-                } else if ((cardArray[i].suit) == 2) {
-                    var niceSymbol = '♠';
-                } else {
-                    var niceSymbol = '♦';
-                }
-                fullArr = fullArr + cardArray[i].rank.substring(0,1) + niceSymbol + ' ';
-            }
-            return fullArr;
-        }
 
-        this.playedCards = [];
-        this.players = [];
-        this.bubbles = [];
-       
-        let scoresheet = this.add.image(1090, 80, 'scores').setScale(0.3).setInteractive();
-        
-        var score = [0, 0];
-        var tricksWon = [0, 0];
-        this.scoreDisplay = [];
 
-        this.scoreDisplay.push(this.add.bitmapText(scoresheet.x - 50, scoresheet.y - 10, 'gothic2', '', 24).setTint(0x000f55));
-        this.scoreDisplay.push(this.add.bitmapText(scoresheet.x + 26, scoresheet.y - 10, 'gothic2', '', 24).setTint(0x000f55));
-        this.scoreDisplay.push(this.add.bitmapText(scoresheet.x - 50, scoresheet.y - 35, 'gothic2', 'We', 20).setTint(0x000f55));
-        this.scoreDisplay.push(this.add.bitmapText(scoresheet.x + 20, scoresheet.y - 35, 'gothic2', 'They', 20).setTint(0x000f55));
-        
-        this.trickTally = [];
-        this.trickTally.push(this.add.text(scoresheet.x - 45, scoresheet.y + 20, '', { fontSize: 16 }).setTint(0x88aaff));
-        this.trickTally.push(this.add.text(scoresheet.x + 25, scoresheet.y + 20, '', { fontSize: 16 }).setTint(0x88aaff));
-        
-        this.players.push(new Player(0, false, 570, 680));
-        this.players.push(new Player(1, false, 125, 410));
-        this.players.push(new Player(2, false, 570, 150));
-        this.players.push(new Player(3, false, 1000, 410));
-        this.players.push(new Player(4, false, 1072, 765));
-        
-        this.dealer = 1;
-
-    
-        this.players[0].generate(570, 680, this);
-        this.players[1].generate(125, 410, this);
-        this.players[2].generate(570, 150, this);
-        this.players[3].generate(1000, 410, this);
-        this.players[4].generate(1072, 765, this);
-      
-        this.instructions_panel = this.add.rectangle(this.players[0].x + 70, this.players[1].y, 400, 100, 0xffffff);
-        this.instructions_panel.setFillStyle(0x222222).setDepth(2000).setAlpha(0.75);
-        this.instructions_text = this.add.text(515, 390, 'Select a seat', { font: '48px Calibri', fill: '#ffffff' });
-        this.instructions_text.setDepth(2001);
-        
-        var avatars = new PlayerDisplay(this.players, game);
-        
-        this.took = [0, 0, 0, 0];   // how many extra cards each player asked for
-        this.trumpsLeft = [0, 0, 0, 0];
-        this.playsIn = 0;
-        this.pointsToBeat = 0;
-        this.playerToBeat = -1;
-        this.bestTrumpValue = 0;
-        this.bestTrumpPlayer = -1;
-        this.sweepDirection = -1;
-        this.whist = false;
-        this.leadSuit = -1;
-        this.thinking = false;
-        this.mySeat = -1;   
-     
-        
-        //var dealerButton = this.add.image(this.players[this.dealer].x - 40, this.players[this.dealer].y + 30, 'play');
-        var bBar = new ButtonBar(this, 440, 805);
-        var currentPlayer = -1;
-        
-        var highBid = 0;
-        var highBidder = -1;
-        var bidsIn = 0;
-        var dCount = 0;
-        var cleaned = false;
-        this.bidding = true;
-        this.trickNum = 1;
-        var max_depth = 4;  // AI looks max_depth moves ahead
-        
-        game.hostGame();    // Go initialize connection with the server
         
         this.showSuit = (highBid, bestSuit) => {
             highBidder = game.mySeat;
@@ -419,11 +379,7 @@ export default class Game extends Phaser.Scene {
                             console.log('card '+c+' replaced with kit card '+k);
                             var newX = game.players[game.mySeat].playerCards[c].pic.x;
                             var newY = game.players[game.mySeat].playerCards[c].pic.y;
-                            
-                            //game.players[game.mySeat].playerCards[c] = new Card(game.players[4].playerCards[k].suit, game.players[4].playerCards[k].rank, game.players[4].playerCards[k].value);              // copy the kit card into the local copy of the hand
-                            //game.players[game.mySeat].playerCards[c].render(game.players[4].playerCards[k].x, game.players[4].playerCards[k].y,);
                             cardsToPickUp.push(k);                                                                  // and now tell the server you have it   
-                            //game.players[game.mySeat].playerCards[c].pic.setVisible(true);       
                             game.tweens.add({   // slide it over to the empty space in the highBidder hand
                                 targets: game.players[4].playerCards[k].pic,
                                 x: newX,
@@ -487,11 +443,11 @@ export default class Game extends Phaser.Scene {
          
             game.tweens.add({
                 targets: myTargets,
-                x: game.players[winner].x,
-                y: game.players[winner].y + 70,  // line up with cards
+                x: game.players[winner].x + 75,
+                y: game.players[winner].y + 40,  // line up with cards
                 ease: 'Power1',
                 duration: 300,  // how fast they sweep away
-                delay: 700, // how long to wait in the middle
+                delay: 900, // how long to wait in the middle
                 onStart: function () {              // notify the server that the board is clear and then add sparkles
                     game.players[winner].lightUp(this, myTargets, winner, game);
                 },
@@ -504,12 +460,12 @@ export default class Game extends Phaser.Scene {
         }            
 
         this.receivedHandOver = () => {
+            console.log('Server says hand is over.');
             this.playedCards = [];
 
             game.playsIn = 0;
             game.bidding = true;
-            cleaned = false;
-            let suitnames = ['clubs', 'hearts', 'spades', 'diamonds'];
+           
             if (game.dealer == 0) {
                 var dealerx = game.players[game.dealer].x;
                 var dealery = 1050;
@@ -530,13 +486,13 @@ export default class Game extends Phaser.Scene {
                         x: dealerx,
                         y: dealery,
                         ease: 'Power1',
-                        delay: 1200,    // Don't take away cards until the trick sweep is completed.
+                        delay: 1500,    // Don't take away cards until the trick sweep is completed.
                         duration: 100 * (a+b)
                     });
                 }
                 game.players[a].playerCards = [];   // Delete the locally stored players
             }
-            avatars.clearBids();          
+            avatars.clearBids();    
         }
     }
     

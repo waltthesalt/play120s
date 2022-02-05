@@ -5,29 +5,28 @@ export default class Card {
         this.value = value;
         this.scrapped = false;
         this.played = false;
-        this.render = (x, y, sprite, n, scene) => {
-            let card = scene.add.image(x, y, sprite, n).setInteractive();
-            card.setDepth(x);
-            //scene.input.setDraggable(card);
-            this.pic = card;
-            this.scrapped = false;
-            let self = this;
-            this.pic.on('pointerover', function() {
-                //console.log(self.rank + ' of ' + self.suit + ' worth ' + self.getPointsValue(0));
-            });
-            this.pic.on('pointerup', function() {
-                //console.log('clicked ' + this.isTinted + ' ' + 0x777777);
-                if (self.isScrapped()) {
-                    this.clearTint();
-                    self.scrapped = false;
-                } else {
-                    this.setTint(0x777777);
-                    self.scrapped = true;
-                }
-            });
-            return card;
-        }
-        
+    }
+    
+    render(x, y, sprite, n, scene) {
+        let card = scene.add.image(x, y, sprite, n).setInteractive();
+        card.setDepth(x);
+        this.pic = card;
+        this.scrapped = false;
+        let self = this;
+        this.pic.on('pointerover', function() {
+            //console.log(self.rank + ' of ' + self.suit + ' worth ' + self.getPointsValue(0));
+        });
+        this.pic.on('pointerup', function() {
+            //console.log('clicked ' + this.isTinted + ' ' + 0x777777);
+            if (self.isScrapped()) {
+                this.clearTint();
+                self.scrapped = false;
+            } else {
+                this.setTint(0x777777);
+                self.scrapped = true;
+            }
+        });
+        return card;
     }
     
     flipUp() {
@@ -130,5 +129,20 @@ export default class Card {
         //console.log('this.value: ' + this.value);
         return val;
     }
+    
+    displayCard() {
+        if ((this.suit) == 0) {
+            var niceSymbol = '♣';
+        } else if ((this.suit) == 1) {
+            var niceSymbol = '♥';
+        } else if ((this.suit) == 2) {
+            var niceSymbol = '♠';
+        } else {
+            var niceSymbol = '♦';
+        }
+        return (this.rank.substring(0,1) + niceSymbol);
+    }
+    
+ 
 }
 

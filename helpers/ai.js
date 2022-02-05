@@ -1,380 +1,253 @@
-    //console.log(currentPlayer + ' playing');
-    //console.log('trying to beat p' + startingPlayerToBeat + ' play of ' + startingPointsToBeat);
-    if (false) {    // This is the AI (not used right now)
-        if (game.multiplayer) {
-            game.socket.emit("yourPlay", currentPlayer, game.players[highBidder].bestSuit, (game.whist || ((highBid == 30) && (game.trickNum == 1))), startingPointsToBeat);
-        }        
-        var hands = [[], [], [], []];
-        var imaginaryPackT = new Pack();
-        var imaginaryPackN = new Pack();
-        var imaginaryPack = new Pack();
-        var trumpSuit = game.players[highBidder].bestSuit;
-        imaginaryPackT.createTrumps(trumpSuit);
-        imaginaryPackN.createNonTrumps(trumpSuit);
-        imaginaryPackT.shufflePack();
-        imaginaryPackN.shufflePack();
-        var fiveGone = false;
+import Pack from './dealer.js';
+import Card from './card.js';
+import Player from './player.js';
+const max_depth = 12;  // AI looks max_depth moves ahead
 
-        // cycle through the players, start with self
-        // currentPlayer already knows her own cards
-        for (var j = 0; j < this.players[currentPlayer].playerCards.length; j++) { 
-            // load all your own cards into the array
-            hands[currentPlayer].push(this.players[currentPlayer].playerCards[j]);
-            if (this.players[currentPlayer].playerCards[j].isTrump(trumpSuit)) {
-                imaginaryPackT.removeCard(this.players[currentPlayer].playerCards[j]);
-                if (this.players[currentPlayer].playerCards[j].rank == '5') {
-                    fiveGone = true;
-                }
-            } else {
-                imaginaryPackN.removeCard(this.players[currentPlayer].playerCards[j]);
-            }
-            //this.players[currentPlayer].playerCards[j].pic.setTint(0x77ccff);   // light up current
-        }
-
-        // now erase what we have already seen
-        if (currentPlayer != highBidder) {
-            var p = highBidder;
-            for (var j = 0; j < game.playedCards.length; j++) {
-                if (game.playedCards[j].isTrump(trumpSuit)) {
-                    //console.log('removing a trump we saw before');
-                    if (game.playedCards[j].rank == '5') {
-                        fiveGone = true;
-                    }
-                    imaginaryPackT.removeCard(game.playedCards[j]);  
-                    //console.log('just removed from imaginaryPackT:');
-                    //game.cardArrayPrint(imaginaryPackT.cards);
-                }
-            }
-            if (!fiveGone) {    
-                // someone still has the 5 so assume it's the bidder
-                //console.log('looking for the 5 in imaginaryPackT:');
-                //game.cardArrayPrint(imaginaryPackT.cards);
-                var theFive = imaginaryPackT.cards.find(element => element.rank == '5');
-                //console.log('theFive: ' + theFive);
-                hands[p].push(theFive);
-                imaginaryPackT.removeCard(theFive);
-                game.trumpsLeft[p]--;
-                fiveGone = true;
-                //console.log(p + ': removed the 5, so imaginaryPackT is now ' + imaginaryPackT);      
-            }                       
-        }
-        // so let's guess what the other cards might be
-        for (var p = 0; p < 4; p++) {       
-            if (p != currentPlayer) {
-                for (var a = 0; a < game.trumpsLeft[p]; a++) {  // game.trumpsLeft
-                    // once for each trump they appear to have                 
-                    hands[p].push(imaginaryPackT.cards.pop());        
-                    //console.log(p + ': removed unknown one, imaginaryPackT is now ' + imaginaryPackT);
-                }
-            }
-        }
-
-
-        imaginaryPackT.mergeWith(imaginaryPackN);
-        imaginaryPackT.shufflePack();
-        for (var i = 1; i < 4; i++) {
-            // fill the unknown hands with randoms
-            p = (currentPlayer + i) % 4;
-            while (hands[p].length < game.players[p].playerCards.length) {   
-                hands[p].push(imaginaryPackT.cards.pop());
-            }
-        }
-
-        this.nodes_map = new Map();
-        var hcopy = [];
-        for (var x = 0; x < 4; x++) {
-            var tmp = [...hands[x]];
-            hcopy.push(tmp);
-        }
-
-        /* temporary test- omniscient computer
-        for (i = 0; i < 4; i++) {
-            hcopy[i] = [];
-            for (j = 0; j < this.players[i].playerCards.length; j++) {
-                hcopy[i].push(new Card(this.players[i].playerCards[j].suit, this.players[i].playerCards[j].rank, this.players[i].playerCards[j].value));
-            }
-        }*/
-
-        var bm = this.getBestMove(hcopy, currentPlayer, 0, startingPlayerToBeat, startingPointsToBeat, whistToBoard, () => {}, game.playsIn, 0, game.leadSuit);
-        console.log(bm + ' is the best play');
-        if (bm.length > 1) {
-            var bmArray = bm.split(',');
-            // it's a tie so pick one
-            var bestWithTie = -1;
-            var toBeat = 200;
-            for (i = 0;i < bmArray.length; i++) {
-
-                // look through all the cards from the AI and pick the lowest
-                if (hcopy[currentPlayer][bmArray[i]].getPointsValue(trumpSuit) < toBeat) {
-                    toBeat = hcopy[currentPlayer][bmArray[i]].getPointsValue(trumpSuit);
-                    bestWithTie = bmArray[i];
-                }
-            }
-        } else {
-            bestWithTie = parseInt(bm);
-        }
-
-        if (this.players[currentPlayer].playerCards[bestWithTie].isTrump(trumpSuit)) {
-            var aiCard = bestWithTie;    
-        } else {
-            // the AI card is a non-trump so just grab the lowest one if u can't beat it
-            toBeat = 200;
-            for (i = 0; i < this.players[currentPlayer].playerCards.length; i++) {
-
-                if ((this.players[currentPlayer].playerCards[i].getPointsValue(trumpSuit) > startingPointsToBeat) && (!this.players[currentPlayer].playerCards[i].isTrump(trumpSuit))) {
-                    // if you can beat the non-trumps, then beat them
-                    lowestCard = i;
-                    break;
-                }
-                // just grab the lowest
-                if (this.players[currentPlayer].playerCards[i].getPointsValue(trumpSuit) < toBeat) {
-                    toBeat = this.players[currentPlayer].playerCards[i].getPointsValue(trumpSuit);
-                    var lowestCard = i;
-                }
-            }
-            var aiCard = lowestCard;
-        }
-        console.log('sending player ' + currentPlayer + ' card ' + aiCard);
-        if (game.multiplayer) {
-            game.socket.emit("cardPlayed", currentPlayer, aiCard);               
-        }
+export default class AI {
+    constructor() {
         
     }
     
-    this.getBestMove = (board, iPlayer, pointsWon, cardToBeat, valueToBeat, boardTrumped, callback = () => {}, cardsIn = 0, depth = 0, ledSuit = -1) => {
-
-             //clear nodes_map if the function is called for a new move
-            if ((cardsIn == game.playsIn) && (depth == 0)) {
-                /*console.log('first entry into getBestMove p' + iPlayer + ' pts:' + pointsWon + ' valueToBeat:' + valueToBeat);
-                game.cardArrayPrint(board[0]);
-                game.cardArrayPrint(board[1]);
-                game.cardArrayPrint(board[2]);
-                game.cardArrayPrint(board[3]);*/
-                this.nodes_map.clear();    
-            } 
-            
-             //If the board state is a terminal one, return the heuristic value
-            if ((depth == max_depth) || (depth > (5 - game.trickNum))) { 
-                return pointsWon; 
-            }
-            
-            var trumpSuit = game.players[highBidder].bestSuit;
-            if ((iPlayer % 2) != (highBidder % 2)) { // the opponents trying to minimize scoring
-                
-                //Initialize best to the highest possible value
-                let best = 100;
-                let processedNullCard = false;  // have we considered the rag card already?
-
-                for (var i = 0; i < board[iPlayer].length; i++) {  
-                    //game.thinking = true;
-                    if ((cardsIn == game.playsIn) && (depth == 0)) {
-                    //    game.players[iPlayer].playerCards[i].pic.setTint(0xccccff);
-                        game.thinking = true;
+    aiPlay(seat, startingPlayerToBeat, startingPointsToBeat, whist, trumpSuit, leadPoints, players, playedCards, highBidder, highBid, trumpsLeft, leadSuit, playsIn, trickNum) {
+        //console.log('trying to beat p' + startingPlayerToBeat + ' play of ' + startingPointsToBeat);
+        
+        var votes = [0,0,0,0,0];
+        for (var sample = 0; sample < 10; sample++) {
+            console.log('Running perfect information sample '+sample);
+            var hands = [];
+            hands.push(new Player(0, true));
+            hands.push(new Player(1, true));
+            hands.push(new Player(2, true));
+            hands.push(new Player(3, true));
+            var imaginaryPackT = new Pack();
+            var imaginaryPackN = new Pack();
+            imaginaryPackT.createTrumps(trumpSuit);     // a pack containing only trumps
+            imaginaryPackN.createNonTrumps(trumpSuit);  // a pack with the remaining non-trumps
+            imaginaryPackT.shufflePack();
+            imaginaryPackN.shufflePack();
+            var fiveGone = false;
+            var sampleTrumpsLeft = new Array(trumpsLeft[0], trumpsLeft[1], trumpsLeft[2], trumpsLeft[3]);     // so we pass by value
+            console.log('1:trumpsLeft ' + trumpsLeft + ' sampleTrumpsLeft '+sampleTrumpsLeft);
+            // cycle through the players, start with self
+            // currentPlayer already knows her own cards
+            //console.log('my own hand length is '+players[seat].unplayedLength());
+            for (var j = 0; j < 5; j++) { 
+                // load all your own cards into the array
+                if (!players[seat].playerCards[j].isPlayed()) {
+                    hands[seat].playerCards.push(players[seat].playerCards[j]);
+                    if (players[seat].playerCards[j].isTrump(trumpSuit)) {
+                        imaginaryPackT.removeCard(players[seat].playerCards[j]);
+                        if (players[seat].playerCards[j].rank == '5') {
+                            fiveGone = true;    // I have the 5, so don't imagine it is anywhere else
+                        }
+                    } else {
+                        imaginaryPackN.removeCard(players[seat].playerCards[j]);
                     }
-                    let isT = board[iPlayer][i].isTrump(trumpSuit);
-                    if ((isT ||  ((cardsIn > 0) && (board[iPlayer][i].suit == ledSuit)) || ((!processedNullCard) && ((!boardTrumped) || (game.trumpCount(board[iPlayer], trumpSuit) == 0))))) {  // ignore late non-trumps
-                        if (!isT) { processedNullCard = true; }
-                        let child = [[],[],[],[]];
-                        child[0] = [...board[0]];
-                        child[1] = [...board[1]];
-                        child[2] = [...board[2]];
-                        child[3] = [...board[3]];
-                        //console.log(child);
-                        let playedCard = new Card(child[iPlayer][i].suit, child[iPlayer][i].rank, child[iPlayer][i].value);
-                        let playedCardValue = playedCard.getPointsValue(trumpSuit);
-                        //if (this.trumpCount(child[iPlayer], trumpSuit) > 1) {
-                            let isTheRightCard = (element) => ((element.rank == playedCard.rank) && (element.suit == playedCard.suit));
-                            let pos = child[iPlayer].findIndex(isTheRightCard);
-                            child[iPlayer].splice(pos, 1);
-                        //}  
-                        let thisCardPointsWon = pointsWon;
-                        var nextCardsIn = cardsIn;
-                        var nextDepth = depth;
-                        var nextValueToBeat = valueToBeat;
-                        var nextCardToBeat = cardToBeat;
-                        var nextBoardTrumped = boardTrumped;
-                        var nextLeadSuit = ledSuit;
-                        if (cardsIn == 0) { // 1st card so set boardTrumped for recursive calls
-                            if (playedCardValue > 100) {
-                                nextBoardTrumped = true;
-                            } else {
-                                nextBoardTrumped = false;
-                                nextLeadSuit = playedCard.suit;
-                                playedCardValue += 50; // first non-trump gets 50 bonus
-                            }
-                            nextValueToBeat = playedCardValue; // first card is the best card
-                            nextCardToBeat = iPlayer;
-                        } else {
-                            if ((playedCard.suit == ledSuit) && (playedCard.suit != trumpSuit)) {
-                                playedCardValue += 50;
-                            }
-                            if (playedCardValue > valueToBeat) {
-                                nextValueToBeat = playedCardValue;
-                                nextCardToBeat = iPlayer;
-                            }
-                        }
-                        if (cardsIn == 3) { // this is the final card in the trick
-                            //console.log(depth + ' p' + iPlayer + ' min with ' + board[iPlayer][i].rank + ' val:' + playedCardValue + ' boardTrumped:' + nextBoardTrumped + ' valueToBeat:' + nextValueToBeat + ' pointsWon:' + thisCardPointsWon);
-                        
-                            var nextPlayer = nextCardToBeat; // the next player is the one who won the trick
-                            nextCardsIn = 0;   // reset for next trick
-                            nextDepth++;
-                            //boardTrumped = false;
-                            if ((nextCardToBeat % 2) == (highBidder % 2)) {
-                                thisCardPointsWon = thisCardPointsWon + 5 - depth; // Declarer won the trick
-                                //console.log('Declarer won a trick in this example - pointsWon now ' + thisCardPointsWon);
-                            } 
-                            nextValueToBeat = 0;
-                        } else {
-                            var nextPlayer = (iPlayer + 1) % 4; // advance to next player normally
-                            nextCardsIn++;
-                        }
-                                
-                        //Recursively calling getBestMove this time with the new board and maximizing turn and incrementing the depth                    
-                        let node_value = this.getBestMove(child, nextPlayer, thisCardPointsWon, nextCardToBeat, nextValueToBeat, nextBoardTrumped, callback, nextCardsIn, nextDepth, nextLeadSuit);
-                        //console.log('node_value: ' + node_value);
-                        
-                        //Updating best value
-                        best = Math.min(best, node_value);
-
-                        //If it's the main function call, not a recursive one, map each heuristic value with its moves indicies
-                        if ((cardsIn == game.playsIn) && (depth == 0)) {
-                            //Comma separated indicies if multiple moves have the same heuristic value
-                            var moves = this.nodes_map.has(node_value) ? this.nodes_map.get(node_value) + ',' + i : i;  // this map will hold all the nodes and their values
-                            this.nodes_map.set(node_value, moves);
-                            console.log('setting ' + node_value + ' for ' + moves);
-                        }
-                    }
-                }
-                //If it's the main call, return the index of the best move or a random index if multiple indicies have the same value
-                if ((cardsIn == game.playsIn) && (depth == 0)) {
-                    let ret = this.nodes_map.get(best);
-
-                    //run a callback after calculation and return the index
-                    callback(ret);
-                    return ret;
-                } else {
-                    //If not main call (recursive) return the heuristic value for next calculation
-                    return best;                    
-                }
-                
-            } else { // the declarers trying to maximizing scoring
-                 
-                //Initialize best to the lowest possible value
-                let best = -100;
-                let processedNullCard = false;
-
-                for (var i = 0; i < board[iPlayer].length; i++) {
-                    if ((cardsIn == game.playsIn) && (depth == 0)) {
-                    //    game.players[iPlayer].playerCards[i].pic.setTint(0xccccff);
-                        game.thinking = true;
-                    }
-                    let isT = board[iPlayer][i].isTrump(trumpSuit);                 
-                    
-                    if ((isT ||  ((cardsIn > 0) && (board[iPlayer][i].suit == ledSuit)) || ((!processedNullCard) && ((!boardTrumped) || (game.trumpCount(board[iPlayer], trumpSuit) == 0))))) {  // ignore late non-trumps
-                        if (!isT) { processedNullCard = true; }
-                        let child = [[],[],[],[]];
-                        child[0] = [...board[0]];
-                        child[1] = [...board[1]];
-                        child[2] = [...board[2]];
-                        child[3] = [...board[3]];
-                        //console.log(child);
-                        let playedCard = new Card(child[iPlayer][i].suit, child[iPlayer][i].rank, child[iPlayer][i].value);
-                        let playedCardValue = playedCard.getPointsValue(trumpSuit);
-                        //if (this.trumpCount(child[iPlayer], trumpSuit) > 1) {
-                            let isTheRightCard = (element) => ((element.rank == playedCard.rank) && (element.suit == playedCard.suit));
-                            let pos = child[iPlayer].findIndex(isTheRightCard);
-                            child[iPlayer].splice(pos, 1);
-                        //}                        
-                        let thisCardPointsWon = pointsWon;
-                        var nextCardsIn = cardsIn;
-                        var nextDepth = depth;
-                        var nextValueToBeat = valueToBeat;
-                        var nextCardToBeat = cardToBeat;
-                        var nextBoardTrumped = boardTrumped;
-                        var nextLeadSuit = ledSuit;
-                        if (cardsIn == 0) { // 1st card so set boardTrumped for recursive calls
-                            if (playedCardValue > 100) {
-                                nextBoardTrumped = true;
-                            } else {
-                                nextBoardTrumped = false;
-                                nextLeadSuit = playedCard.suit;
-                                playedCardValue += 50; // first non-trump gets 50 bonus
-                            }
-                            nextValueToBeat = playedCardValue; // first card is the best card
-                            nextCardToBeat = iPlayer;
-                        } else {
-                            if ((playedCard.suit == ledSuit) && (playedCard.suit != trumpSuit)) {
-                                playedCardValue += 50;
-                            }
-                            if (playedCardValue > valueToBeat) {
-                                nextValueToBeat = playedCardValue;
-                                nextCardToBeat = iPlayer;
-                            }
-                        }
-                        if (cardsIn == 3) { // this is the final card in the trick
-                            //console.log(depth + ' p' + iPlayer + ' min with ' + board[iPlayer][i].rank + ' val:' + playedCardValue + ' boardTrumped:' + nextBoardTrumped + ' valueToBeat:' + nextValueToBeat + ' pointsWon:' + thisCardPointsWon);
-                        
-                            var nextPlayer = nextCardToBeat; // the next player is the one who won the trick
-                            nextCardsIn = 0;   // reset for next trick
-                            nextDepth++;
-                            nextBoardTrumped = false;
-                            if ((nextCardToBeat % 2) == (highBidder % 2)) {
-                                thisCardPointsWon = thisCardPointsWon + 5 - depth; // Declarer won the trick
-                                //console.log('Declarer won a trick in this example - pointsWon now ' + thisCardPointsWon);
-                            }
-                            nextValueToBeat = 0;
-                        } else {
-                            var nextPlayer = (iPlayer + 1) % 4; // advance to next player normally
-                            nextCardsIn++;
-                        }
-                        //console.log(depth + ' p' + iPlayer + ' max with ' + board[iPlayer][i].rank + ' val:' + playedCardValue + ' boardTrumped:' + nextBoardTrumped + ' valueToBeat:' + nextValueToBeat + ' pointsWon:' + thisCardPointsWon);                 
-                                
-                        //Recursively calling getBestMove this time with the new board and maximizing turn and incrementing the depth                    
-                        let node_value = this.getBestMove(child, nextPlayer, thisCardPointsWon, nextCardToBeat, nextValueToBeat, nextBoardTrumped, callback, nextCardsIn, nextDepth, nextLeadSuit);
-                        
-                        //Updating best value
-                        best = Math.max(best, node_value);
-
-                        //If it's the main function call, not a recursive one, map each heuristic value with its moves indicies
-                        if ((cardsIn == game.playsIn) && (depth == 0)) {
-                            //Comma separated indicies if multiple moves have the same heuristic value
-                            var moves = this.nodes_map.has(node_value) ? this.nodes_map.get(node_value) + ',' + i : i;  // this map will hold all the nodes and their values
-                            this.nodes_map.set(node_value, moves);
-                            console.log('setting ' + node_value + ' for ' + moves);
-                        }
-                    }
-                }
-                //If it's the main call, return the index of the best move or a random index if multiple indicies have the same value
-                if ((cardsIn == game.playsIn) && (depth == 0)) {
-                    let ret = this.nodes_map.get(best);
-
-                    //run a callback after calculation and return the index
-                    callback(ret);
-                    return ret;
-                } else {
-                    //If not main call (recursive) return the heuristic value for next calculation
-                    return best;                    
                 }
             }
-
+         
+            // now erase what we have already seen played (Bruce Parsons)
+            if (seat != highBidder) {
+                var p = highBidder;
+                for (var j = 0; j < playedCards.length; j++) {
+                    if (playedCards[j].isTrump(trumpSuit)) {
+                        //console.log('removing ' + playedCards[j].displayCard() + ', a trump we saw before');
+                        if (playedCards[j].rank == '5') {
+                            fiveGone = true;
+                        }
+                        imaginaryPackT.removeCard(playedCards[j]);  
+                    }
+                }
+                if (!fiveGone) {    
+                    // someone still has the 5 so assume it's the bidder
+                    var theFive = imaginaryPackT.cards.find(element => element.rank == '5');
+                    hands[p].playerCards.push(theFive);
+                    imaginaryPackT.removeCard(theFive);
+                    sampleTrumpsLeft[p]--;
+                    fiveGone = true;
+                    //console.log(p + ': removed the ' + theFive.displayCard() + ' so imaginaryPackT is now ' + imaginaryPackT.displayPack());      
+                }                       
+            }
+            console.log('2:trumpsLeft ' + trumpsLeft + ' sampleTrumpsLeft '+sampleTrumpsLeft);
+            
+            // so let's guess what the other cards might be
+            for (var p = 0; p < 4; p++) {       
+                if (p != seat) {
+                    for (var a = 0; a < sampleTrumpsLeft[p]; a++) {  // game.trumpsLeft
+                        // once for each trump they appear to have                 
+                        hands[p].playerCards.push(imaginaryPackT.cards.pop());        
+                        //console.log(p + ': guessed a trump to remove, imaginaryPackT is now ' + imaginaryPackT.displayPack());
+                    }
+                }
+            }
+    
+            imaginaryPackT.mergeWith(imaginaryPackN);
+            imaginaryPackT.shufflePack();
+            for (var i = 1; i < 4; i++) {
+                // fill the unknown hands with random cards (trumps or non-trumps)
+                p = (seat + i) % 4;
+                //console.log('player '+p+' hand length is '+players[p].unplayedLength());
+                while (hands[p].playerCards.length < players[p].unplayedLength()) {   
+                    hands[p].playerCards.push(imaginaryPackT.cards.pop());
+                }
+            }
+            console.log('Full imagined hands: '+hands[0].displayHand()+' '+hands[1].displayHand()+'  '+hands[2].displayHand()+'  '+hands[3].displayHand());
+    /*
+            // temporary test- omniscient computer
+            for (i = 0; i < 4; i++) {
+                hcopy[i] = [];
+                for (j = 0; j < this.players[i].playerCards.length; j++) {
+                    hcopy[i].push(new Card(this.players[i].playerCards[j].suit, this.players[i].playerCards[j].rank, this.players[i].playerCards[j].value));
+                }
+            }
+            
+    */
+            if ((trickNum == 0) && (playsIn < 2)) {
+                var depth = 12;
+            } else {
+                var depth = max_depth;
+            }
+            //console.log('player ' + seat + ' playsIn '+playsIn+' isMax '+(seat % 2 == highBidder % 2)+' highBidder '+highBidder+' highScore '+startingPointsToBeat);
+            for (var i = 0;i < 1;i++) { // Run the minimax 5 times (we need a different set of imaginary hands for each though)
+                var bestMove = this.minimax(hands, depth, -99999, 99999, (seat % 2 == highBidder % 2), trumpSuit, leadPoints, 0, seat, highBidder, highBid, trickNum, playsIn, startingPointsToBeat, startingPlayerToBeat, whist);
+                console.log('Sample ' + sample + ' recommending '+bestMove[0].displayCard() + ' to fetch score '+bestMove[1]);
+                var selectedIndex = players[seat].findCard(bestMove[0]); // bestMove is a pair [best card,best score]
+                votes[selectedIndex]++;
+            }
         }
+        console.log('Vote tally: '+votes);
+        var winner = 0;
+        var winVotes = votes[winner];
+        var winValues = players[seat].playerCards[0].getPointsValue(trumpSuit);
+        for (i = 0;i < 5;i++) {
+            if (highBid == 30) {    // Take the most conservative vote
+                if ((votes[i] > 0) && (players[seat].playerCards[i].getPointsValue(trumpSuit) > winValues)) {
+                    winValues = players[seat].playerCards[i].getPointsValue(trumpSuit);
+                    winner = i;
+                }
+            } else {                // Take the mode vote
+                if (votes[i] > winVotes) {
+                    winVotes = votes[i];
+                    winner = i;
+                }
+            }
+        }
+        return winner;
+    }
+    
+    minimax(hands, depth, alpha, beta, isMaximizing, trumpSuit, leadPoints, sum, player, highBidder, highBid, trickNum, playsIn, highScore, highScorer, whistToBoard) {
+        //console.log('minimax: hands '+hands[0].displayHand()+'  '+hands[1].displayHand()+'  '+hands[2].displayHand()+'  '+hands[3].displayHand()+'  depth '+depth+' isMax '+isMaximizing+' sum '+sum+' player '+player);
+        var children = hands[player].legalPlays(whistToBoard, trumpSuit, leadPoints);   // my options are my cards
+        var currMove;
+        if (depth == 0 || children.length == 0) {
+            return [null, sum];
+        }
+        var maxValue = -99999;
+        var minValue = 99999;
+        var bestMove;
+
+        for (var i = 0; i < children.length; i++) {     // looping through the children moves
+            currMove = children[i];                     // currMove is a card object
+
+            var handsCopy = new Array(hands[0].copyPlayer(), hands[1].copyPlayer(), hands[2].copyPlayer(), hands[3].copyPlayer());     // so we pass by value
+            var newScore = this.makeMove(handsCopy, currMove, depth, player, trumpSuit);     // this will update handsCopy to the new state
+            if ((newScore < 100) && (playsIn == 0)) {   // add 50 to led non-trumps
+                newScore = newScore + 50;
+            }
+            var nextPlayer = (player + 1) % 4;  // unless we reach the end of trick++;
+    
+            if (newScore > highScore) {
+                var newHighScore = newScore;
+                var newHighScorer = player;
+            } else {
+                var newHighScore = highScore;
+                var newHighScorer = highScorer;
+            }
+            var newSum = sum + this.evaluateBoard(handsCopy, trumpSuit, player, highBidder);
+            var nextTrickNum = trickNum;
+            if (playsIn == 0) {
+                var nextWhistToBoard = (children[i].isTrump(trumpSuit) || ((highBid == 30) && (trickNum == 0)));
+                var nextLeadPoints = children[i].getPointsValue(trumpSuit);
+            } else {
+                var nextWhistToBoard = whistToBoard;
+                nextLeadPoints = leadPoints;
+                if (playsIn == 3) {
+                    newSum = newSum + (((newHighScorer % 2) == (highBidder % 2)) ? 10000 : 0);
+                    newHighScore = 0;
+                    nextPlayer = newHighScorer;
+                    var nextTrickNum = trickNum + 1;
+                }
+            }
+
+            //console.log('evaluateBoard: '+newSum+' playsIn '+playsIn+' nextPlayer '+nextPlayer);
+            var [childBestMove, childValue] = this.minimax(handsCopy, depth - 1, alpha, beta, (nextPlayer % 2 == highBidder % 2), trumpSuit, nextLeadPoints, newSum, nextPlayer, highBidder, highBid, nextTrickNum, (playsIn + 1) % 4, newHighScore, newHighScorer, nextWhistToBoard);
             
-    aiBid() {
+            if (isMaximizing) {
+                if (childValue > maxValue) {
+                    maxValue = childValue;
+                    bestMove = children[i];   // currMove
+                }
+                if (childValue > alpha) {
+                    alpha = childValue;
+                }
+            } else {
+                if (childValue < minValue) {
+                    minValue = childValue;
+                    bestMove = children[i];   // currMove
+                }
+                if (childValue < beta) {
+                    beta = childValue;
+                }
+            }  
+            if (alpha >= beta) {
+                break;
+            }
+            if (depth == max_depth) {
+                console.log('depth: trying play '+children[i].displayCard() + ' playsIn ' + playsIn + ' result ' + childValue);
+            }
+        }
+    
+        if (isMaximizing) {
+            return [bestMove, maxValue];
+        } else {
+            return [bestMove, minValue];
+        }
+    }
+    
+    makeMove(hands, move, depth, player, trump) {
+        var moveScore = move.getPointsValue(trump);
+        hands[player].removeCard(move); 
+        return moveScore;
+    }
+    
+    evaluateBoard(hands, trumpSuit, player, highBidder) {
+        //console.log('highBidder hands '+hands[highBidder].displayHand()+' '+hands[(highBidder+2)%4].displayHand()+' val '+(parseInt(hands[highBidder].getHandValue(trumpSuit)) + parseInt(hands[(highBidder + 2) % 4].getHandValue(trumpSuit))));
+        //console.log('challenger hands '+hands[(highBidder+1)%4].displayHand()+' '+hands[(highBidder+3)%4].displayHand()+' val '+(parseInt(hands[(highBidder+1)%4].getHandValue(trumpSuit)) + parseInt(hands[(highBidder + 3) % 4].getHandValue(trumpSuit))));
+        return (parseInt(hands[highBidder].getHandValue(trumpSuit)) + parseInt(hands[(highBidder + 2) % 4].getHandValue(trumpSuit)) - parseInt(hands[(highBidder + 1) % 4].getHandValue(trumpSuit)) - parseInt(hands[(highBidder + 3) % 4].getHandValue(trumpSuit))); // +sum?
+    }
+   
+    aiBid(player, leadingBid, isDealer, returnSuit = false) {
         var bestBid = 0;
         var bid;
         
         for (var suitItem = 0;suitItem < 4;suitItem++) {
             bid = 0;
-            this.playerCards.forEach (function (cardItem) {
+            player.playerCards.forEach (function (cardItem) {
                 if ((cardItem.suit == suitItem) || ((cardItem.suit == 1) && (cardItem.rank == 'Ace'))) {
                     if (cardItem.rank == '5') {
-                        bid = Phaser.Math.MaxAdd(bid, 20, 30);
+                        bid += 19;
                     } else if (cardItem.rank == 'Jack') {
-                        bid = Phaser.Math.MaxAdd(bid, 8, 30);
+                        bid += 8;
+                    } else if ((cardItem.rank == 'Ace') || (cardItem.rank == 'King')) {
+                        bid += 4;
+                    } else if (cardItem.rank == 'Queen') {
+                        bid += 2;
                     } else {
-                        bid = Phaser.Math.MaxAdd(bid, 3, 30);
+                        bid += 1;
                     }
+                }
+                if (bid > 30) {
+                    bid = 30;
                 }
                 // add up the bid values
             
@@ -384,11 +257,20 @@
                 this.bestSuit = suitItem;
             }
         }
-        if (bestBid < 20) { // no 15 bids
+        bestBid = Math.floor(bestBid / 5) * 5;                                                                          // make it a multiple of 5
+        if ((bestBid < 20) || ((!isDealer) && (bestBid <= leadingBid)) || (isDealer && (bestBid < leadingBid))) {       // no 15 bids and have to reach the minimum bid
             bestBid = 0;
         } else {
-            bestBid = Phaser.Math.FloorTo(bestBid / 5) * 5;
+            if ((isDealer) && (bestBid != 30)) {
+                    bestBid = leadingBid;   // No need to overbid the dealer, unless it's 30
+            }
         }
-        //bestBid = 0;
-        return bestBid;
+        
+        if (returnSuit) {
+            return this.bestSuit;
+        } else {
+            console.log('player '+player+' is choosing '+bestBid);
+            return bestBid;
+        }
     }
+}
