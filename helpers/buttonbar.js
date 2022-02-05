@@ -34,6 +34,11 @@ export default class ButtonBar {
             });            
             xo = xo + 100;
         }
+        // now create the suit buttons
+        this.buttons.push(this.game.add.image(485, this.buttons[0].y + 28, 'clubs').setInteractive().setData('suitCode',0).setAlpha(0));
+        this.buttons.push(this.game.add.image(585, this.buttons[0].y + 28, 'hearts').setInteractive().setData('suitCode',1).setAlpha(0));
+        this.buttons.push(this.game.add.image(685, this.buttons[0].y + 28, 'spades').setInteractive().setData('suitCode',2).setAlpha(0));
+        this.buttons.push(this.game.add.image(785, this.buttons[0].y + 28, 'diamonds').setInteractive().setData('suitCode',3).setAlpha(0));        
         
        
         this.buttons[2].on('pointerdown', function () {
@@ -61,7 +66,29 @@ export default class ButtonBar {
             self.game.registerBid(30);
             //self.hideBidButtons();
         })   
-  
+        for (var i = 6; i < 10; i++) {
+            this.buttons[i].setInteractive();
+            this.buttons[i].on('pointerover', function () {
+                this.setTint(0xBBBBBB);
+            });
+            this.buttons[i].on('pointerout', function () {
+                this.setTint();
+            });
+            this.buttons[i].on('pointerup', function () {
+                console.log('pressed the suit button');
+                this.setTint(0x999999);
+                for (var j = 6;j < 10;j++) {
+                    self.buttons[j].disableInteractive();
+                }
+                self.game.tweens.add({
+                    targets: [self.buttons[6], self.buttons[7], self.buttons[8], self.buttons[9]],
+                    alpha: 0,
+                    ease: 'Power1',
+                    duration: 200
+                });
+                self.game.showSuit(this.getData('suitCode'));
+            });
+        }
     }
     
     activateBidButtons(highBid, dealer, userSeat = 0) {
@@ -108,59 +135,19 @@ export default class ButtonBar {
         });
     }
 
-    activateSuitButtons(highBid) {
-        this.game.tweens.add({
-            targets: [this.buttons[2], this.buttons[3], this.buttons[4], this.buttons[5], this.r[2], this.r[3], this.r[4], this.r[5]],
-            alpha: 0,
-            ease: 'Power1',
-            duration: 300,
-            onComplete: this.raiseSuitButtons,
-            onCompleteParams: [highBid, this]
-        });
-    }
-
-    raiseSuitButtons(tween, targets, highBid, scene) {
-        tween.remove();
-        let self = scene;
+    raiseSuitButtons(scene) {
+        //tween.remove();
+        console.log('raising the suit buttons');
+        let self = this;
         
-        self.sym.push(self.game.add.image(485, targets[0].y + 28, 'clubs').setInteractive().setData('suitCode',0).setAlpha(0));
-        self.sym.push(self.game.add.image(585, targets[0].y + 28, 'hearts').setInteractive().setData('suitCode',1).setAlpha(0));
-        self.sym.push(self.game.add.image(685, targets[0].y + 28, 'spades').setInteractive().setData('suitCode',2).setAlpha(0));
-        self.sym.push(self.game.add.image(785, targets[0].y + 28, 'diamonds').setInteractive().setData('suitCode',3).setAlpha(0));
-        
-        self.game.tweens.add({
-            targets: [self.sym[0], self.sym[1], self.sym[2], self.sym[3]],
+        scene.tweens.add({
+            targets: [this.buttons[6], this.buttons[7], this.buttons[8], this.buttons[9]],
             alpha: 1,
             ease: 'Power1',
-            duration: 300,
-            onComplete: function(tween) {
-                tween.remove();        
-            }   
+            duration: 300
         });
-        for (var i = 0; i < 4; i++) {
-            self.sym[i].on('pointerover', function () {
-                this.setTint(0xBBBBBB);
-            });
-            self.sym[i].on('pointerout', function () {
-                this.setTint();
-            });
-            self.sym[i].on('pointerdown', function () {
-                this.setTint(0x999999);
-                //self.game.players[0].bestSuit = this.getData('suitCode');
-                //console.log('suitCode = ' + this.getData('suitCode'));
-                self.game.tweens.add({
-                    targets: [self.sym[0], self.sym[1], self.sym[2], self.sym[3]],
-                    alpha: 0,
-                    ease: 'Power1',
-                    duration: 300,
-                    onComplete: function () {
-                        for (var j = 0;j < 4; j++) {
-                            self.sym[j].setInteractive(false);
-                        }
-                    }
-                });
-                self.game.showSuit(highBid, this.getData('suitCode'));
-            });
+        for (var i = 6; i < 10; i++) {
+            this.buttons[i].setInteractive();
         }
     }
     
@@ -193,9 +180,9 @@ export default class ButtonBar {
     }
     
     activateDiscardButton() {
-        this.buttons.push(this.game.add.bitmapText(this.x + 125, this.y, 'gothic2', 'Discard', 48).setDepth(1).setAlpha(1).setInteractive());
+        this.buttons.push(this.game.add.bitmapText(this.x + 125, this.y, 'gothic2', 'Discard', 48).setDepth(1).setVisible(true).setAlpha(1).setInteractive());
         let b = this.buttons.length - 1;
-        this.r.push(this.game.add.rectangle(this.buttons[b].x + 83, this.buttons[b].y + 35, this.buttons[b].width + 30, this.buttons[b].height + 10, 0x555555).setAlpha(1));
+        this.r.push(this.game.add.rectangle(this.buttons[b].x + 83, this.buttons[b].y + 35, this.buttons[b].width + 30, this.buttons[b].height + 10, 0x555555).setVisible(true).setAlpha(1));
         let rlen = this.r.length - 1;
         let self = this;
         this.buttons[b].on('pointerover', function() {
@@ -211,12 +198,8 @@ export default class ButtonBar {
     }
     
     hideDiscardButton(b, rlen) {
-        this.game.tweens.add({
-            targets: [this.buttons[b], this.r[rlen]],
-            alpha: 0,
-            ease: 'Power1',
-            duration: 300
-        });
+        this.buttons[b].setVisible(false);
+        this.r[rlen].setVisible(false);
     } 
     
     activateDealButton(tween, targets, g, r, firstClick = true) {    

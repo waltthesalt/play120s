@@ -107,6 +107,7 @@ export default class PlayerDisplay {
         this.avatar[seat].setInteractive();
         this.avatar[seat].setFillStyle(0x222222);   // shade it grey again
         this.character[seat].setVisible(true);      // add a robot
+        this.nameText[seat].setText();
     }    
     
     setName(seat, name) {

@@ -7,9 +7,9 @@ const config = {
     height: 900,
     scale: {
         mode: Phaser.Scale.FIT,
-        autoCenter: Phaser.Scale.CENTER_HORIZONTALLY
+        autoCenter: Phaser.Scale.CENTER_BOTH
     },
-    backgroundColor: '#999999',
+    backgroundColor: 0x25855D,
     dom: {
         createContainer: true
     },

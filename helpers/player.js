@@ -124,7 +124,7 @@ export default class Player {
                     this.clearTint();
                 });
                 if (item.isTrump(tSuit) || (((!trumped) || (trumpsTicker == 0) || (renegableTicker == trumpsTicker)))) {    // only set the listener for legal plays
-                    console.log('activating card ' + index);
+                    //console.log('activating card ' + index);
                     item.pic.on('pointerup', function() {   
                         self.makeUnplayable(game);
                         game.socket.emit("cardPlayed", game.mySeat, index); // Telling the server

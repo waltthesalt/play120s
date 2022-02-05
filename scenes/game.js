@@ -58,7 +58,7 @@ export default class Game extends Phaser.Scene {
         this.players = [];
         this.bubbles = [];
        
-        let scoresheet = this.add.image(1090, 80, 'scores').setScale(0.3).setInteractive();
+        let scoresheet = this.add.image(1090, 80, 'scores').setScale(0.3);
         
         var score = [0, 0];
         var tricksWon = [0, 0];
@@ -103,6 +103,7 @@ export default class Game extends Phaser.Scene {
      
         var bBar = new ButtonBar(this, 440, 805);
         var highBidder = -1;
+        var highBid = 0;
         this.bidding = true;
         this.trickNum = 1;
         
@@ -150,13 +151,14 @@ export default class Game extends Phaser.Scene {
                 game.receiveBidPrompt(highBid, dealer);
             }
         });
-        this.socket.on('requestSuit', function (seat, highBid, dealer) {
+        this.socket.on('requestSuit', function (seat, serverHighBid, dealer) {
+            highBid = serverHighBid;
             avatars.activate(seat);     
             avatars.setTimer(seat);
             if (game.mySeat == seat) {     // is it me you are looking for?
                 console.log('received a request to choose suit'); 
                 highBidder = game.mySeat;
-                bBar.activateSuitButtons(highBid);
+                bBar.raiseSuitButtons(game);
             }
         });
         this.socket.on('receivedSuitfromServer', function (highBidder, highBid, bestSuit) {
@@ -165,7 +167,7 @@ export default class Game extends Phaser.Scene {
         }); 
         this.socket.on('forceDiscardButton', function (seat) {
             if (game.mySeat == seat) {  // Did I run out of time?
-            console.log('Server told me I ran out of discarding time.');
+                console.log('Server told me I ran out of discarding time.');
                 bBar.hideDiscardButton(bBar.buttons.length - 1, bBar.r.length - 1);
                 game.lockInDiscards();
             }
@@ -222,7 +224,8 @@ export default class Game extends Phaser.Scene {
             game.receivedHandOver();
         });
         
-        this.socket.on('gameUpdate', function (seatToUpdate, gameState, players, dealer, seat, rank, suit, value, showOnScreen, location = -1) {
+        this.socket.on('gameUpdate', function (seatToUpdate, gameState, players, dealer) {
+            console.log('seatToUpdate '+seatToUpdate+' mySeat '+game.mySeat);
             game.dealer = dealer;
             if ((gameState = BIDDING) && (game.mySeat == seatToUpdate)) {
                 //game.players = players; // get all the cards from the server
@@ -230,13 +233,18 @@ export default class Game extends Phaser.Scene {
                     for (var c = 0;c < players[s].playerCards.length;c++) {
                         game.players[s].playerCards.push(new Card(players[s].playerCards[c].suit, players[s].playerCards[c].rank, players[s].playerCards[c].value));
                         console.log(s+' '+c+' '+game.players[s].playerCards[c].displayCard());
-                        game.players[s].playerCards[c].render(game.players[s].x + c * 36, game.players[s].y, 'cards', suitnames[game.players[s].playerCards[c].suit]+''+game.players[s].playerCards[c].rank, game);
+                        if (!game.players[s].playerCards[c].isPlayed()) {
+                            if (s == game.mySeat) { // Should we show the card face up?
+                                game.players[s].playerCards[c].render(game.players[s].x + c * 36, game.players[s].y, 'cards', suitnames[game.players[s].playerCards[c].suit]+''+game.players[s].playerCards[c].rank, game);
+                            } else {
+                                game.players[s].playerCards[c].render(game.players[s].x + c * 36, game.players[s].y, 'cards', 'back', game);
+                            }
+                        }
                     }
                 }
             }
         });
         
-
         this.receiveCard = (seat, rank, suit, value, showOnScreen, location = -1) => {
             if (seat == 4) {    
                 var localSeat = 4;  // leave the kit where it is
@@ -316,15 +324,17 @@ export default class Game extends Phaser.Scene {
 
 
         
-        this.showSuit = (highBid, bestSuit) => {
+        this.showSuit = (bestSuit) => {
+            console.log('enter the function showSuit');
             highBidder = game.mySeat;
             game.bidding = false;
             avatars.addSuitSymbol(highBidder, highBid, bestSuit);
             game.socket.emit("selectedSuit", game.mySeat, bestSuit);     
         };
         
-        this.showReceivedSuit = (hb, highBid, bestSuit) => {
-            console.log('processing highBid ' + highBid + ' received suit ' + bestSuit);
+        this.showReceivedSuit = (hb, serverHighBid, bestSuit) => {
+            console.log('processing highBid ' + serverHighBid + ' received suit ' + bestSuit);
+            highBid = serverHighBid;
             game.bidding = false;
             highBidder = hb; // storing locally in the guest for use later
             game.players[highBidder].bestSuit = bestSuit;
@@ -332,28 +342,29 @@ export default class Game extends Phaser.Scene {
             avatars.activateAll();
             avatars.setAllTimers();
             this.preSelect(highBidder, bestSuit);
+            console.log('ACTIVATING DISCARD');
             bBar.activateDiscardButton();
         };
         
         this.preSelect = (highBidder, bestSuit) => {
             // pre-select discards as a convenience
-            console.log('running pre-select');
+            //console.log('running pre-select');
             for (var c = 0; c < 5; c++) {
                 if (((game.players[game.mySeat].playerCards[c].suit) != bestSuit) && (game.players[game.mySeat].playerCards[c].suit + '' + game.players[game.mySeat].playerCards[c].rank != '1Ace')) {
                     game.players[game.mySeat].playerCards[c].scrap();
-                    console.log('preSelect scrapping card '+c);
+                    //console.log('preSelect scrapping card '+c);
                 }
             }
 
             for (c = 0; c < 3; c++) {
                 // show kit cards to the highBidder
                 if (game.mySeat == highBidder) {
-                    console.log('showing KIT because ' + game.mySeat + ' == ' + highBidder);
+                    //console.log('showing KIT because ' + game.mySeat + ' == ' + highBidder);
                     game.players[4].playerCards[c].flipUp();
                     // pre-select discards from the kit
                     if (((game.players[4].playerCards[c].suit) != bestSuit) && (game.players[4].playerCards[c].suit + '' + game.players[4].playerCards[c].rank != '1Ace')) {
                         game.players[4].playerCards[c].scrap();
-                        console.log('preSelect scrapping kit card '+c);
+                        //console.log('preSelect scrapping kit card '+c);
                     }
                 }
 
@@ -446,7 +457,7 @@ export default class Game extends Phaser.Scene {
                 x: game.players[winner].x + 75,
                 y: game.players[winner].y + 40,  // line up with cards
                 ease: 'Power1',
-                duration: 300,  // how fast they sweep away
+                duration: 400,  // how fast they sweep away
                 delay: 900, // how long to wait in the middle
                 onStart: function () {              // notify the server that the board is clear and then add sparkles
                     game.players[winner].lightUp(this, myTargets, winner, game);
@@ -479,14 +490,14 @@ export default class Game extends Phaser.Scene {
                 var dealerx = 1400;
                 var dealery = game.players[game.dealer].y;                    
             }  
-            for (let a = 0; a < 5; a++) {
+            for (let a = 0; a < 5; a++) {   // dealer to sweep away all cards
                 for (let b = 0; b < game.players[a].playerCards.length; b++) {
                     game.tweens.add({
                         targets: [game.players[a].playerCards[b].pic],
                         x: dealerx,
                         y: dealery,
                         ease: 'Power1',
-                        delay: 1500,    // Don't take away cards until the trick sweep is completed.
+                        delay: 1700,    // Don't take away cards until the trick sweep is completed.
                         duration: 100 * (a+b)
                     });
                 }

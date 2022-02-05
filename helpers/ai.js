@@ -118,18 +118,10 @@ export default class AI {
         console.log('Vote tally: '+votes);
         var winner = 0;
         var winVotes = votes[winner];
-        var winValues = players[seat].playerCards[0].getPointsValue(trumpSuit);
         for (i = 0;i < 5;i++) {
-            if (highBid == 30) {    // Take the most conservative vote
-                if ((votes[i] > 0) && (players[seat].playerCards[i].getPointsValue(trumpSuit) > winValues)) {
-                    winValues = players[seat].playerCards[i].getPointsValue(trumpSuit);
-                    winner = i;
-                }
-            } else {                // Take the mode vote
-                if (votes[i] > winVotes) {
-                    winVotes = votes[i];
-                    winner = i;
-                }
+            if (votes[i] > winVotes) {  // look for the card with the most wins from the samples
+                winVotes = votes[i];
+                winner = i;
             }
         }
         return winner;
