@@ -40,6 +40,21 @@ export default class ButtonBar {
         this.buttons.push(this.game.add.image(685, this.buttons[0].y + 28, 'spades').setInteractive().setData('suitCode',2).setAlpha(0));
         this.buttons.push(this.game.add.image(785, this.buttons[0].y + 28, 'diamonds').setInteractive().setData('suitCode',3).setAlpha(0));        
         
+        this.buttons.push(this.game.add.bitmapText(this.x + 125, this.y, 'gothic2', 'Discard', 48).setDepth(1).setVisible(false).setAlpha(0).setInteractive());
+        let b = this.buttons.length - 1;
+        this.r.push(this.game.add.rectangle(this.buttons[b].x + 83, this.buttons[b].y + 35, this.buttons[b].width + 30, this.buttons[b].height + 10, 0x555555).setVisible(false).setAlpha(0));
+        let rlen = this.r.length - 1;
+       
+        this.buttons[b].on('pointerover', function() {  // the discard button
+            self.r[rlen].setFillStyle(0x000000);
+        });
+        this.buttons[b].on('pointerout', function() {
+            self.r[rlen].setFillStyle(0x555555);
+        });
+        this.buttons[b].on('pointerdown', function() {
+            self.hideDiscardButton(b, rlen);
+            self.game.lockInDiscards();
+        });        
        
         this.buttons[2].on('pointerdown', function () {
             self.game.players[0].bid = 0;
@@ -118,8 +133,6 @@ export default class ButtonBar {
             alpha: 0,
             ease: 'Power1',
             duration: 300
-            //onComplete: this.activateDealButton,
-            //onCompleteParams: [this.game, this.r]
         });
     }
     
@@ -180,26 +193,24 @@ export default class ButtonBar {
     }
     
     activateDiscardButton() {
-        this.buttons.push(this.game.add.bitmapText(this.x + 125, this.y, 'gothic2', 'Discard', 48).setDepth(1).setVisible(true).setAlpha(1).setInteractive());
-        let b = this.buttons.length - 1;
-        this.r.push(this.game.add.rectangle(this.buttons[b].x + 83, this.buttons[b].y + 35, this.buttons[b].width + 30, this.buttons[b].height + 10, 0x555555).setVisible(true).setAlpha(1));
-        let rlen = this.r.length - 1;
+        this.buttons[10].setVisible(true);
+        this.r[6].setVisible(true);
         let self = this;
-        this.buttons[b].on('pointerover', function() {
-            self.r[rlen].setFillStyle(0x000000);
+        this.game.tweens.add({
+            targets: [this.buttons[10], this.r[6]],
+            alpha: 1,
+            ease: 'Power1',
+            duration: 300,
+            onComplete: function() {
+                self.buttons[10].setInteractive();
+            }
         });
-        this.buttons[b].on('pointerout', function() {
-            self.r[rlen].setFillStyle(0x555555);
-        });
-        this.buttons[b].on('pointerdown', function() {
-            self.hideDiscardButton(b, rlen);
-            self.game.lockInDiscards();
-        });
+        
     }
     
     hideDiscardButton(b, rlen) {
-        this.buttons[b].setVisible(false);
-        this.r[rlen].setVisible(false);
+        this.buttons[b].setAlpha(0).setVisible(false);
+        this.r[rlen].setAlpha(0).setVisible(false);
     } 
     
     activateDealButton(tween, targets, g, r, firstClick = true) {    
@@ -224,11 +235,6 @@ export default class ButtonBar {
                 ease: 'Power1',
                 duration: 300,
             });
-            if (g.misdeal) {
-                g.misdeal = false;
-                g.bidding = true;
-                console.log('misdeal');
-            }
             self.hideDealButton();
             g.socket.emit("dealButton", g.mySeat);   
         });

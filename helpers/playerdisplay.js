@@ -8,6 +8,7 @@ export default class PlayerDisplay {
         this.scene = scene;
         this.activePlayer = -1;
         this.timerTween = [null,null,null,null];
+        
         for (let i = 0; i < 4; i++) {   // Initialize the interface
             this.nameText.push(scene.add.bitmapText(playerArray[i].x - 22, playerArray[i].y - 20, 'gothic2', '', 24));
             this.nameText[i].setDepth(2001);
@@ -92,7 +93,7 @@ export default class PlayerDisplay {
             
             this.timeBar.push(scene.add.rectangle(playerArray[i].x + 70, playerArray[i].y + 25, 210, 10, 0xffffff));
             this.timeBar[i].setFillStyle(0xdddddd).setDepth(2001);
-            this.character.push(scene.add.image(playerArray[i].x + 0, playerArray[i].y - 5, 'robot_' + i).setScale(0.3).setDepth(2001));
+            this.character.push(scene.add.image(playerArray[i].x + 0, playerArray[i].y - 5, 'robot_' + i).setDisplaySize(50, 50).setDepth(2001));
         }
     }
     

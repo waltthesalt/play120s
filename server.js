@@ -92,12 +92,15 @@ io.on('connection', function (socket) {
         playsIn = 0;
         discardsIn = [];
         whist = false;
+        for (var i = 0;i < 4;i++) {
+            players[i].isComputer = true;
+        }
     } else {
         //console.log('Telling everyone whats after happening.');
         // Tell this player what is already in place
-        for (var i=0; i<playerSockets.length; i++) {
+        for (var i=0; i < playerSeats.length; i++) {
             console.log('Found the player ' + playerSeats[i] + ' to send out.');
-            io.sockets.in("room-"+roomno).emit('reservedSeat', playerSeats[i]);
+            io.sockets.in("room-"+roomno).emit('reservedSeat', playerSeats[i], dealer);
         }     
         for (i=0; i<4; i++) {
             if (names[i]!='') {
@@ -105,6 +108,10 @@ io.on('connection', function (socket) {
                 io.sockets.in("room-"+roomno).emit('setName', i, names[i]);
             }
         }
+        if ((gameState == BIDDING) || (gameState == PLAYING)) {
+            console.log('Update the newly joined player because gameState is '+gameState);
+            io.sockets.in("room-"+roomno).emit("gameUpdate", -1, gameState, players, dealer);   // update the new observer
+        }                
 
     }
 
@@ -210,18 +217,6 @@ io.on('connection', function (socket) {
     socket.on('cardPlayed', function (seat, cardIndex) {
         processPlay(seat, cardIndex);
     });
-    
-    socket.on('boardClear', function (seat) {
-        boardCount[roomno]++;   // Do we need this function, which waits on all the clients before proceeding??
-        //console.log(boardCount[roomno] + ' players cleared the trick.');
-        if ((boardCount[roomno] == 4) ) {    // When we have heard from all players but the hand is not yet over
-            //console.log('all tricks cleared - move to next trick with currentPlayer=' + currentPlayer);
-            boardCount[roomno] = 0;
-            /*if ((playsIn == 0) && (trickNum == 0))
-            nextPlay();*/
-        }
-    
-    });    
     
     socket.on('disconnect', function () {
         var whoLeft = playerSockets.findIndex(player => player == socket.id);
@@ -573,8 +568,10 @@ var timesUp = () => {
                 io.sockets.in("room-"+roomno).emit('forceDiscardButton', i);     
             }
         }
-    } else if (gameState == PLAYING) {              // Force the player to play the first legal card
-        //computerPlay(currentPlayer);
+    } else if (gameState == PLAYING) {              // Ask a robot to take over from player
+        players[currentPlayer].isComputer = true;   // Robots will take your job!
+        io.sockets.in("room-"+roomno).emit('playerLeftTable', currentPlayer);
+        nextPlay(pointsToBeat, playerToBeat, whist);
     }
 };
 
@@ -597,10 +594,11 @@ var tallyUpHand = () => {
     bestTrumpPlayer = -1;
     tricksWon[0] = 0;
     tricksWon[1] = 0;
+    clearInterval(gameInterval);
     
     console.log('updating scores ' + score[0] + ' vs '+ score[1]);
     io.sockets.in("room-"+roomno).emit('updateScore', score[0], score[1], dealer);    // Tell the clients to end the hand
     if ((score[0] != 120) && (score[1] != 120) && (score[0] != -120) && (score[1] != -120)) {
         setTimeout(function() { shuffleAndDeal(); }, 2800); // Give the clients a chance to clean up before going to next hand
     }
-}
+};
