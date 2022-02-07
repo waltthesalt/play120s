@@ -453,8 +453,8 @@ export default class Game extends Phaser.Scene {
         }
         
         this.sweepTrick = (winner) => {
-            var weTeam = (game.mySeat == -1) ? 0 : ((winner + game.mySeat) % 2);
-            this.trickTally[weTeam].setText(this.trickTally[(weTeam + 1) % 2].text + '★');    // Mark a trick won
+            var winTeam = (game.mySeat == -1) ? (winner % 2) : ((winner + game.mySeat) % 2);
+            this.trickTally[winTeam].setText(this.trickTally[winTeam].text + '★');    // Mark a trick won
             game.playsIn = 0;
             let myTargets = [];
             for (let i = 0; ((i < game.playedCards.length) && (i < 4)); i++) {

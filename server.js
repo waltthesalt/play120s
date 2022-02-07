@@ -141,6 +141,7 @@ io.on('connection', function (socket) {
     });
     
     socket.on('dealButton', function(seat) {
+        score = [0, 0];
         shuffleAndDeal();
     });
     
