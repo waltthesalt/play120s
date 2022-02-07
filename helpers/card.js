@@ -7,13 +7,14 @@ export default class Card {
         this.played = false;
     }
     
-    render(x, y, sprite, n, scene, seat) {
-        let card = scene.add.image(x, y, sprite, n).setInteractive();
+    render(x, y, sprite, n, scene, seat, clickable = false) {
+        let card = scene.add.image(x, y, sprite, n);
         card.setDepth(x);
         this.pic = card;
         this.scrapped = false;
         let self = this;
-        if (seat == scene.mySeat) {
+        if (clickable) {
+            card.setInteractive();
             this.pic.on('pointerup', function() {
                 //console.log('clicked ' + this.isTinted + ' ' + 0x777777);
                 if (self.isScrapped()) {
@@ -31,6 +32,18 @@ export default class Card {
     flipUp() {
         let suitnames = ['clubs', 'hearts', 'spades', 'diamonds'];
         this.pic.setTexture('cards', suitnames[this.suit]+''+this.rank);
+        this.pic.setInteractive();
+        let self = this;
+        this.pic.on('pointerup', function() {
+            //console.log('clicked ' + this.isTinted + ' ' + 0x777777);
+            if (self.isScrapped()) {
+                this.clearTint();
+                self.scrapped = false;
+            } else {
+                this.setTint(0x777777);
+                self.scrapped = true;
+            }
+        });
     }
     
     scrap() {

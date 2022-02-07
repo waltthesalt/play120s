@@ -13,7 +13,7 @@ export default class AI {
         
         var votes = [0,0,0,0,0];
         for (var sample = 0; sample < 10; sample++) {
-            console.log('Running perfect information sample '+sample);
+            //console.log('Running perfect information sample '+sample);
             var hands = [];
             hands.push(new Player(0, true));
             hands.push(new Player(1, true));
@@ -27,7 +27,7 @@ export default class AI {
             imaginaryPackN.shufflePack();
             var fiveGone = false;
             var sampleTrumpsLeft = new Array(trumpsLeft[0], trumpsLeft[1], trumpsLeft[2], trumpsLeft[3]);     // so we pass by value
-            console.log('1:trumpsLeft ' + trumpsLeft + ' sampleTrumpsLeft '+sampleTrumpsLeft);
+            //console.log('1:trumpsLeft ' + trumpsLeft + ' sampleTrumpsLeft '+sampleTrumpsLeft);
             // cycle through the players, start with self
             // currentPlayer already knows her own cards
             //console.log('my own hand length is '+players[seat].unplayedLength());
@@ -68,7 +68,7 @@ export default class AI {
                     //console.log(p + ': removed the ' + theFive.displayCard() + ' so imaginaryPackT is now ' + imaginaryPackT.displayPack());      
                 }                       
             }
-            console.log('2:trumpsLeft ' + trumpsLeft + ' sampleTrumpsLeft '+sampleTrumpsLeft);
+            //console.log('2:trumpsLeft ' + trumpsLeft + ' sampleTrumpsLeft '+sampleTrumpsLeft);
             
             // so let's guess what the other cards might be
             for (var p = 0; p < 4; p++) {       
@@ -110,7 +110,7 @@ export default class AI {
             //console.log('player ' + seat + ' playsIn '+playsIn+' isMax '+(seat % 2 == highBidder % 2)+' highBidder '+highBidder+' highScore '+startingPointsToBeat);
             for (var i = 0;i < 1;i++) { // Run the minimax 5 times (we need a different set of imaginary hands for each though)
                 var bestMove = this.minimax(hands, depth, -99999, 99999, (seat % 2 == highBidder % 2), trumpSuit, leadPoints, 0, seat, highBidder, highBid, trickNum, playsIn, startingPointsToBeat, startingPlayerToBeat, whist);
-                console.log('Sample ' + sample + ' recommending '+bestMove[0].displayCard() + ' to fetch score '+bestMove[1]);
+                //console.log('Sample ' + sample + ' recommending '+bestMove[0].displayCard() + ' to fetch score '+bestMove[1]);
                 var selectedIndex = players[seat].findCard(bestMove[0]); // bestMove is a pair [best card,best score]
                 votes[selectedIndex]++;
             }
@@ -195,7 +195,7 @@ export default class AI {
                 break;
             }
             if (depth == max_depth) {
-                console.log('depth: trying play '+children[i].displayCard() + ' playsIn ' + playsIn + ' result ' + childValue);
+                //console.log('depth: trying play '+children[i].displayCard() + ' playsIn ' + playsIn + ' result ' + childValue);
             }
         }
     
@@ -238,6 +238,7 @@ export default class AI {
                         bid += 1;
                     }
                 }
+                bid += Math.floor(Math.random() * 3);   // add some randomness to the bid
                 if (bid > 30) {
                     bid = 30;
                 }
@@ -261,7 +262,7 @@ export default class AI {
         if (returnSuit) {
             return this.bestSuit;
         } else {
-            console.log('player '+player+' is choosing '+bestBid);
+            //console.log('player '+player+' is choosing '+bestBid);
             return bestBid;
         }
     }

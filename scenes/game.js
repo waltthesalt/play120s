@@ -189,18 +189,12 @@ export default class Game extends Phaser.Scene {
                 var y = game.players[seat].playerCards[location].pic.y;
                 game.players[seat].playerCards[location].pic.setVisible(false);
                 game.players[seat].playerCards[location] = new Card(suit, rank, value);
-                game.players[seat].playerCards[location].render(x, y, 'cards', 'back', game, seat); //TEST put this back after
-                //game.players[seat].playerCards[location].render(x, y, 'cards', suitnames[game.players[seat].playerCards[location].suit]+''+game.players[seat].playerCards[location].rank, game);
+                game.players[seat].playerCards[location].render(x, y, 'cards', 'back', game, seat, false); //TEST put this back after
+                //game.players[seat].playerCards[location].render(x, y, 'cards', suitnames[game.players[seat].playerCards[location].suit]+''+game.players[seat].playerCards[location].rank, game, false);
             }
         });
-        this.socket.on('yourPlay', function (seat, trump, trumped, leadpoints) {
-            // Light up the current player's time bar
-            avatars.activate(seat);
-            avatars.setTimer(seat);
-            if (seat == game.mySeat) {     
-                //console.log('received a request to play. trump:' + trump + ' leadpoints:' + leadpoints + 'T?:' + trumped); 
-                game.players[game.mySeat].makePlayable(game, trump, trumped, leadpoints);
-            }
+        this.socket.on('yourPlay', function (seat, trump, trumped, leadPoints) {
+            game.activatePlayerHand(seat, trump, trumped, leadPoints);
         });     
         this.socket.on('pitterPatter', function (currentPlayer, timeRemaining, state = -1) {
             avatars.activate(currentPlayer);
@@ -229,21 +223,21 @@ export default class Game extends Phaser.Scene {
             game.receivedHandOver();
         });
         
-        this.socket.on('gameUpdate', function (seatToUpdate, gameState, players, dealer) {
+        this.socket.on('gameUpdate', function (seatToUpdate, gameState, players, dealer, currentPlayer) {
             console.log('seatToUpdate '+seatToUpdate+' mySeat '+game.mySeat);
             game.dealer = dealer;
             if (((gameState == BIDDING) || (gameState == PLAYING)) && (game.mySeat == seatToUpdate)) {
                 //game.players = players; // get all the cards from the server
-                for (var s = 0;s < players.length;s++) {
+                for (var s = 0;((s < 4) || ((s == 4) && (gameState == BIDDING))); s++) {    // update all the hands (include kit only in bidding state)
                     game.players[s].playerCards = [];
                     for (var c = 0;c < players[s].playerCards.length;c++) {
                         game.players[s].playerCards.push(new Card(players[s].playerCards[c].suit, players[s].playerCards[c].rank, players[s].playerCards[c].value));
                         console.log(s+' '+c+' '+game.players[s].playerCards[c].displayCard());
                         if (!players[s].playerCards[c].played) {
                             if (s == game.mySeat) { // Should we show the card face up?
-                                game.players[s].playerCards[c].render(game.players[s].x + c * 36, game.players[s].y, 'cards', suitnames[game.players[s].playerCards[c].suit]+''+game.players[s].playerCards[c].rank, game, s);
+                                game.players[s].playerCards[c].render(game.players[s].x + c * 36, game.players[s].y, 'cards', suitnames[game.players[s].playerCards[c].suit]+''+game.players[s].playerCards[c].rank, game, s, true);
                             } else {
-                                game.players[s].playerCards[c].render(game.players[s].x + c * 36, game.players[s].y, 'cards', 'back', game, s);
+                                game.players[s].playerCards[c].render(game.players[s].x + c * 36, game.players[s].y, 'cards', 'back', game, s, false);
                             }
                         }
                     }
@@ -284,9 +278,9 @@ export default class Game extends Phaser.Scene {
             }          
         
             if (localSeat == game.mySeat) { // Should we show the card face up?
-                this.players[localSeat].playerCards[i].render(dealerx, dealery, 'cards', suitnames[game.players[localSeat].playerCards[i].suit]+''+game.players[localSeat].playerCards[i].rank, game, localSeat);  // render the card below the screen and slide in                
+                this.players[localSeat].playerCards[i].render(dealerx, dealery, 'cards', suitnames[game.players[localSeat].playerCards[i].suit]+''+game.players[localSeat].playerCards[i].rank, game, localSeat, true);  // render the card below the screen and slide in                
             } else {
-                this.players[localSeat].playerCards[i].render(dealerx, dealery, 'cards', 'back', game, localSeat);
+                this.players[localSeat].playerCards[i].render(dealerx, dealery, 'cards', 'back', game, localSeat, false);
             }
             
             var targetX = game.players[localSeat].x + (i * 36);
@@ -359,7 +353,7 @@ export default class Game extends Phaser.Scene {
             // pre-select discards as a convenience
             //console.log('running pre-select');
             for (var c = 0; c < 5; c++) {
-                if (((game.players[game.mySeat].playerCards[c].suit) != bestSuit) && (game.players[game.mySeat].playerCards[c].suit + '' + game.players[game.mySeat].playerCards[c].rank != '1Ace')) {
+                if (!game.players[game.mySeat].playerCards[c].isTrump(bestSuit)) {  // scrap all the non-trumps
                     game.players[game.mySeat].playerCards[c].scrap();
                     //console.log('preSelect scrapping card '+c);
                 }
@@ -371,7 +365,7 @@ export default class Game extends Phaser.Scene {
                     //console.log('showing KIT because ' + game.mySeat + ' == ' + highBidder);
                     game.players[4].playerCards[c].flipUp();
                     // pre-select discards from the kit
-                    if (((game.players[4].playerCards[c].suit) != bestSuit) && (game.players[4].playerCards[c].suit + '' + game.players[4].playerCards[c].rank != '1Ace')) {
+                    if (!game.players[4].playerCards[c].isTrump(bestSuit)) {
                         game.players[4].playerCards[c].scrap();
                         //console.log('preSelect scrapping kit card '+c);
                     }
@@ -452,6 +446,15 @@ export default class Game extends Phaser.Scene {
             game.players[seat].slideItIn(game, cardIndex);    
         }
         
+        this.activatePlayerHand = (seat, trump, trumped, leadPoints) => {
+            console.log('activatePlayerHand');
+            avatars.activate(seat);
+            avatars.setTimer(seat);
+            if (seat == game.mySeat) {     
+                game.players[game.mySeat].makePlayable(game, trump, trumped, leadPoints);
+            }
+        }
+
         this.sweepTrick = (winner) => {
             var winTeam = (game.mySeat == -1) ? (winner % 2) : ((winner + game.mySeat) % 2);
             this.trickTally[winTeam].setText(this.trickTally[winTeam].text + '★');    // Mark a trick won
