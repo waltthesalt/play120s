@@ -4,12 +4,12 @@ const config = {
     type: Phaser.AUTO,
     parent: 'game',
     width: 1280,
-    height: 900,
+    height: 850,
     scale: {
         mode: Phaser.Scale.FIT,
-        autoCenter: Phaser.Scale.CENTER_BOTH
+        autoCenter: Phaser.Scale.CENTER_HORIZONTALLY
     },
-    backgroundColor: 0x25855D,
+    backgroundColor: 0x662222,
     dom: {
         createContainer: true
     },

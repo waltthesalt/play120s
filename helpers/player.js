@@ -157,7 +157,7 @@ export default class Player {
         game.tweens.add({   // slide in the played card
             targets: this.playerCards[cardIndex].pic,
             x: 635 + xAdj,
-            y: 410 + yAdj,
+            y: 350 + yAdj,
             ease: 'Power1',
             duration: 200
         });           

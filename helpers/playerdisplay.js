@@ -43,8 +43,8 @@ export default class PlayerDisplay {
                     ease: 'Power1',
                     duration: 300,
                     onYoyo: function () {
-                            self.scene.instructions_text.setX(485).setY(360).setText("Enter your name");
-                            self.scene.instructions_panel.setY(365).setSize(400,210);
+                            self.scene.instructions_text.setX(470).setY(300).setText("Enter your name");
+                            self.scene.instructions_panel.setX(600).setY(305).setSize(420,210);
                     },
                     onComplete: function () {
                             self.element = scene.add.dom(self.avatar[0].x, self.avatar[1].y+40).createFromCache('nameform');

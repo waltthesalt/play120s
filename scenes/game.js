@@ -46,7 +46,7 @@ export default class Game extends Phaser.Scene {
     }
 
     create() {
-        this.add.image(640, 450, 'table');
+        //this.add.image(640, 450, 'table');
 
         const p = new Pack();
         p.createPack();       // calling our function to fill our array
@@ -58,7 +58,7 @@ export default class Game extends Phaser.Scene {
         this.players = [];
         this.bubbles = [];
        
-        let scoresheet = this.add.image(1090, 80, 'scores').setScale(0.3);
+        let scoresheet = this.add.image(1090, 40, 'scores').setScale(0.3);
         
         var score = [0, 0];
         var tricksWon = [0, 0];
@@ -73,17 +73,17 @@ export default class Game extends Phaser.Scene {
         this.trickTally.push(this.add.text(scoresheet.x - 45, scoresheet.y + 20, '', { fontSize: 16 }).setTint(0x88aaff));
         this.trickTally.push(this.add.text(scoresheet.x + 25, scoresheet.y + 20, '', { fontSize: 16 }).setTint(0x88aaff));
         
-        this.players.push(new Player(0, true, 570, 680));
-        this.players.push(new Player(1, true, 125, 410));
-        this.players.push(new Player(2, true, 570, 150));
-        this.players.push(new Player(3, true, 1000, 410));
-        this.players.push(new Player(4, true, 1072, 765));
+        this.players.push(new Player(0, true, 570, 600));
+        this.players.push(new Player(1, true, 125, 350));
+        this.players.push(new Player(2, true, 570, 100));
+        this.players.push(new Player(3, true, 1000, 350));
+        this.players.push(new Player(4, true, 1072, 600));
         
         this.dealer = 1;
       
-        this.instructions_panel = this.add.rectangle(this.players[0].x + 70, this.players[1].y, 400, 100, 0xffffff);
+        this.instructions_panel = this.add.rectangle(this.players[0].x + 70, this.players[1].y, 350, 100, 0xffffff);
         this.instructions_panel.setFillStyle(0x222222).setDepth(2000).setAlpha(0.75);
-        this.instructions_text = this.add.text(515, 390, 'Select a seat', { font: '48px Calibri', fill: '#ffffff' });
+        this.instructions_text = this.add.text(515, 325, 'Select a seat', { font: '48px Calibri', fill: '#ffffff' });
         this.instructions_text.setDepth(2001);
         
         var avatars = new PlayerDisplay(this.players, game);
@@ -101,7 +101,7 @@ export default class Game extends Phaser.Scene {
         this.thinking = false;
         this.mySeat = -1;   
      
-        var bBar = new ButtonBar(this, 440, 805);
+        var bBar = new ButtonBar(this, 440, 720);
         var highBidder = -1;
         var highBid = 0;
         this.bidding = true;
