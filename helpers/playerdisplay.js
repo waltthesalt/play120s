@@ -35,57 +35,24 @@ export default class PlayerDisplay {
                 self.character[i].setVisible(false);    
                 scene.mySeat = i;
                 scene.socket.emit('takeSeat', i);    // Tell the server you reserved a seat
+                for (var c = 0;c < 5;c++) {
+                    if ((scene.players[i].playerCards[c] != null) && (!scene.players[i].playerCards[c].isPlayed())) {
+                        scene.players[i].playerCards[c].flipUp();   // client is now a player so show the hand
+                    }
+                }
                 
                 scene.tweens.add({
-                    targets: [self.scene.instructions_text, self.instructions_panel],
+                    targets: [scene.instructions_text, scene.instructions_panel],
                     alpha: 0,
                     yoyo: true,
                     ease: 'Power1',
                     duration: 300,
                     onYoyo: function () {
-                            self.scene.instructions_text.setX(470).setY(300).setText("Enter your name");
-                            self.scene.instructions_panel.setX(600).setY(305).setSize(420,210);
+                        scene.instructions_text.setX(470).setY(300).setVisible(true).setText("Enter your name");
+                        scene.instructions_panel.setX(600).setY(305).setVisible(true).setSize(420,210);
                     },
                     onComplete: function () {
-                            self.element = scene.add.dom(self.avatar[0].x, self.avatar[1].y+40).createFromCache('nameform');
-                            var el = document.createElement('select');
-                            self.element.setPerspective(800);
-                            self.element.addListener('click');
-                            self.element.on('click', function (event) {
-                                if (event.target.name === 'playButton')
-                                {
-                                    var inputText = this.getChildByName('nameField');
-                                    //  Have they entered anything?
-                                    if (inputText.value !== '')
-                                    {
-                                        console.log('Set your name. inputText.value '+inputText.value+ ' i '+i);
-                                        //  Turn off the click events
-                                        this.removeListener('click');
-                        
-                                        //  Hide the login element
-                                        this.setVisible(false);
-                                        scene.instructions_panel.setVisible(false);
-                                        self.scene.instructions_text.setVisible(false);
-                        
-                                        //  Populate the name bar with whatever they typed in
-                                        self.nameText[i].setText(inputText.value);
-                                        self.character[i].setVisible(false);
-                                        scene.socket.emit('setName', scene.mySeat, inputText.value); // Tell the server you now have a name
-                                    }
-                                    else
-                                    {
-                                        //  Flash the prompt
-                                        this.scene.tweens.add({
-                                            //targets: text,
-                                            alpha: 0.2,
-                                            duration: 250,
-                                            ease: 'Power3',
-                                            yoyo: true
-                                        });
-                                    }
-                                }
-                        
-                            });
+                        self.element.setVisible(true);
                     }
                 });
     
@@ -95,12 +62,55 @@ export default class PlayerDisplay {
             this.timeBar[i].setFillStyle(0xdddddd).setDepth(2001);
             this.character.push(scene.add.image(playerArray[i].x + 0, playerArray[i].y - 5, 'robot_' + i).setDisplaySize(50, 50).setDepth(2001));
         }
+        self.element = scene.add.dom(self.avatar[0].x, self.avatar[1].y+40).createFromCache('nameform').setVisible(false);
+        var el = document.createElement('select');
+        self.element.setPerspective(800);
+        self.element.addListener('click');
+        self.element.on('click', function (event) {
+            if (event.target.name === 'playButton')
+            {
+                var inputText = this.getChildByName('nameField');
+                //  Have they entered anything?
+                if (inputText.value !== '')
+                {
+                    
+                    //  Turn off the click events
+                    this.removeListener('click');
+    
+                    //  Hide the login element
+                    this.setVisible(false);
+                    scene.instructions_panel.setVisible(false);
+                    scene.instructions_text.setVisible(false);
+    
+                    //  Populate the name bar with whatever they typed in
+                    self.nameText[scene.mySeat].setText(inputText.value);
+                    self.character[scene.mySeat].setVisible(false);
+                    scene.socket.emit('setName', scene.mySeat, inputText.value); // Tell the server you now have a name
+                }
+                else
+                {
+                    //  Flash the prompt
+                    this.scene.tweens.add({
+                        //targets: text,
+                        alpha: 0.2,
+                        duration: 250,
+                        ease: 'Power3',
+                        yoyo: true
+                    });
+                }
+            }
+    
+        }); 
     }
     
     seatTaken(seat) {
         this.avatar[seat].disableInteractive();
         this.character[seat].setVisible(false);    
-        if (this.scene.mySeat != seat) {
+        if (this.scene.mySeat == seat) {
+//            this.element.setVisible(true);
+//            this.scene.instructions_text.setX(470).setY(300).setVisible(true).setAlpha(1).setText("Enter your name");
+//            this.scene.instructions_panel.setX(600).setY(305).setVisible(true).setAlpha(1).setSize(420,210);            
+        } else {
             this.avatar[seat].setFillStyle(0x770000); // shade it red
         }
     }
@@ -162,15 +172,6 @@ export default class PlayerDisplay {
             width: 0,
             ease: 'linear',
             duration: 30000,
-            /*onComplete: () => {
-                //console.log('color '+this.timeBar[seat].color+' tint '+this.timeBar[seat].tintTopLeft);
-                if ((this.activePlayer != seat) && (this.activePlayer != 5)) {   // Don't let display lag leave an inactive avatar with low timeBar
-                    this.timeBar[seat].width = 210;  
-                }
-                if (this.activePlayer == 5) {
-                    console.log('5:this.timebar size for seat ' + seat+' is ' + this.timeBar[seat].width+'. counting '+this.scene.tweens.getTweensOf(this.timeBar[seat]).length+' tweens');
-                }
-            }, callbackScope: this*/
         });
     }
     setAllTimers() {
@@ -237,7 +238,7 @@ export default class PlayerDisplay {
     }
     removeNameField() {
         this.element.setVisible(false);
+        this.scene.instructions_text.setVisible(false);
+        this.scene.instructions_panel.setVisible(false);
     }
-    
-
 }

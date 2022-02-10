@@ -207,7 +207,7 @@ export default class Player {
         for (var i = 0; i < this.playerCards.length; i++) {
             if ((!this.playerCards[i].isPlayed()) && (this.playerCards[i].isTrump(trumpSuit))) {
                 trumpsTicker++;
-                if ((((this.playerCards[i].rank == 'Ace') && (this.playerCards[i].suit == 1)) || (this.playerCards[i].rank == 'Jack') || (this.playerCards[i].rank == '5')) && (this.playerCards[i].getPointsValue(trumpSuit) > leadPoints)) {
+                if ((this.playerCards[i].getPointsValue(trumpSuit) >= 112) && (this.playerCards[i].getPointsValue(trumpSuit) > leadPoints)) {
                     renegableTicker++;
                 }
             }        
@@ -228,5 +228,11 @@ export default class Player {
             }
         }
         return ticker;
+    }
+    
+    makeCardsSelectable() {
+        for (var i = 0; i < this.playerCards.length; i++) {
+            this.playerCards[i].makeSelectable();
+        }
     }
 }

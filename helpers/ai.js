@@ -12,7 +12,7 @@ export default class AI {
         //console.log('trying to beat p' + startingPlayerToBeat + ' play of ' + startingPointsToBeat);
         
         var votes = [0,0,0,0,0];
-        for (var sample = 0; sample < 10; sample++) {
+        for (var sample = 0; sample < 30; sample++) {
             //console.log('Running perfect information sample '+sample);
             var hands = [];
             hands.push(new Player(0, true));
@@ -91,7 +91,7 @@ export default class AI {
                     hands[p].playerCards.push(imaginaryPackT.cards.pop());
                 }
             }
-            console.log('Full imagined hands: '+hands[0].displayHand()+' '+hands[1].displayHand()+'  '+hands[2].displayHand()+'  '+hands[3].displayHand());
+            //console.log('Full imagined hands: '+hands[0].displayHand()+' '+hands[1].displayHand()+'  '+hands[2].displayHand()+'  '+hands[3].displayHand());
     /*
             // temporary test- omniscient computer
             for (i = 0; i < 4; i++) {
@@ -119,10 +119,11 @@ export default class AI {
         var winner = 0;
         var winVotes = votes[winner];
         for (i = 0;i < 5;i++) {
-            if (votes[i] > winVotes) {  // look for the card with the most wins from the samples
+            if ((votes[i] > winVotes) || ((votes[i] == winVotes) && (players[seat].playerCards[i].getPointsValue(trumpSuit) < players[seat].playerCards[winner].getPointsValue(trumpSuit)))){  // look for the card with the most wins from the samples
                 winVotes = votes[i];
                 winner = i;
             }
+            
         }
         return winner;
     }
@@ -131,7 +132,7 @@ export default class AI {
         //console.log('minimax: hands '+hands[0].displayHand()+'  '+hands[1].displayHand()+'  '+hands[2].displayHand()+'  '+hands[3].displayHand()+'  depth '+depth+' isMax '+isMaximizing+' sum '+sum+' player '+player);
         var children = hands[player].legalPlays(whistToBoard, trumpSuit, leadPoints);   // my options are my cards
         var currMove;
-        if (depth == 0 || children.length == 0) {
+        if ((depth == 0) || (children.length == 0)) {
             return [null, sum];
         }
         var maxValue = -99999;
@@ -155,7 +156,7 @@ export default class AI {
                 var newHighScore = highScore;
                 var newHighScorer = highScorer;
             }
-            var newSum = sum + this.evaluateBoard(handsCopy, trumpSuit, player, highBidder);
+            var newSum = sum; // + this.evaluateBoard(handsCopy, trumpSuit, player, highBidder);
             var nextTrickNum = trickNum;
             if (playsIn == 0) {
                 var nextWhistToBoard = (children[i].isTrump(trumpSuit) || ((highBid == 30) && (trickNum == 0)));
@@ -220,37 +221,33 @@ export default class AI {
    
     aiBid(player, leadingBid, isDealer, returnSuit = false) {
         var bestBid = 0;
-        var bid;
+        var suitBid;
         
         for (var suitItem = 0;suitItem < 4;suitItem++) {
-            bid = 0;
+            suitBid = 0;
             player.playerCards.forEach (function (cardItem) {
-                if ((cardItem.suit == suitItem) || ((cardItem.suit == 1) && (cardItem.rank == 'Ace'))) {
+                if (cardItem.isTrump(suitItem)) {
                     if (cardItem.rank == '5') {
-                        bid += 19;
+                        suitBid += 19;
                     } else if (cardItem.rank == 'Jack') {
-                        bid += 8;
+                        suitBid += 8;
                     } else if ((cardItem.rank == 'Ace') || (cardItem.rank == 'King')) {
-                        bid += 4;
+                        suitBid += 5;
                     } else if (cardItem.rank == 'Queen') {
-                        bid += 2;
+                        suitBid += 3;
                     } else {
-                        bid += 1;
+                        suitBid += 1;
                     }
                 }
-                bid += Math.floor(Math.random() * 3);   // add some randomness to the bid
-                if (bid > 30) {
-                    bid = 30;
-                }
-                // add up the bid values
-            
             });
-            if (bid > bestBid) {
-                bestBid = bid;
+            if (suitBid > bestBid) {
+                bestBid = suitBid;
                 this.bestSuit = suitItem;
             }
+            //console.log('raw bestbid is '+ bestBid);
         }
-        bestBid = Math.floor(bestBid / 5) * 5;                                                                          // make it a multiple of 5
+        bestBid += Math.floor(Math.random() * 3);
+        bestBid = Math.min(Math.floor(bestBid / 5) * 5, 30);                                                            // make it a multiple of 5
         if ((bestBid < 20) || ((!isDealer) && (bestBid <= leadingBid)) || (isDealer && (bestBid < leadingBid))) {       // no 15 bids and have to reach the minimum bid
             bestBid = 0;
         } else {

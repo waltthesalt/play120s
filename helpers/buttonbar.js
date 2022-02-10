@@ -7,6 +7,7 @@ export default class ButtonBar {
         this.buttons = [];  // deal and bid buttons
         this.sym = [];  // suit buttons
         this.drawDealButton();
+        this.drawBidButtons();  // This is pre-draw all the buttons
     }
     
     drawBidButtons() {    
@@ -109,9 +110,9 @@ export default class ButtonBar {
     activateBidButtons(highBid, dealer, userSeat = 0) {
         this.userSeat = userSeat;
         console.log('counting '+this.buttons.length+' buttons');
-        if (this.buttons.length == 2) { //2) { // if all we have is a Deal and Link button -- if this is the first button added
-            this.drawBidButtons();      // then we have to draw them first    
-        }
+//        if (this.buttons.length == 2) { //2) { // if all we have is a Deal and Link button -- if this is the first button added
+//            this.drawBidButtons();      // then we have to draw them first    
+//        }
         if (this.buttons[2].alpha == 0) {
             this.raiseBidButtons();    
         }
